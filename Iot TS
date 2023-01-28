@@ -1,0 +1,352 @@
+# IoT Troubleshooter
+# SDEV-435
+# Ron Pelak
+
+
+# Header imports
+######################################
+
+from ctypes.wintypes import PSIZE
+from distutils.cmd import Command
+import os
+from tkinter import *
+from tkinter import ttk
+import pandas as pd
+import csv
+
+
+# Classes
+######################################
+
+# Datafile class: only one instance (datafile); handles the file iteself
+class Datafile:
+    ## initialization sets the first csv file from the standard director as the active datafile
+    def __init__(self):
+        self.__dir = "C://tshoot/datafiles"
+        self.listDatafile = self.fileLister()
+        self.__choice = self.listDatafile[0]
+        self.__dictObject ={}
+        self.__dictProtocol = {} 
+        self.nameSetter()
+        self.fileActivator()
+    ## getters & setters
+    ### choice is manipulated with GUI widgets; transferred to name upon acceptance
+    def choiceGetter(self):
+        return self.__choice
+    def nameGetter(self):
+        return self.__name
+    def dictObjectGetter(self):
+        return self.__dictObject
+    def dictProtocolGetter(self):
+        return self.__dictProtocol
+    def choiceSetter(self, pname):
+        self.__choice = pname
+    def nameSetter(self):
+        self.__name = self.__choice
+        self.__path = self.__dir + "/" + self.__name
+    ## acquires a list of csv files for display & selection purposes
+    def fileLister(self):
+        filelist = os.listdir(self.__dir)
+        return [file for file in filelist if file.endswith(".csv")]
+    ## activates a datafile
+    def fileActivator(self):
+        ### load the csv file into the dataframe (df)
+        self.df = pd.read_csv(self.__path)
+        ### delete all existing object class instances
+        for name in self.__dictObject:
+            del self.__dictObject[name]
+        ## build a class for each unique object in the datafile
+        ### also create a new dictionary of name : class pairs for easy reference
+        for obj in self.df['Device'].unique():
+            self.__dictObject.update({obj : Object(obj)})
+        ### loop through the newly created object class instances and add type & list of positions to each
+        for name, obj in self.__dictObject.items():
+            self.__fdf = self.df[self.df.Device == name]
+            obj.typeSetter(self.__fdf['Type'].iloc[0])
+            obj.listPositionSetter(self.__fdf['Value'].unique())
+        ## from the config file, load and create protocols previously created for this datafile       
+        with open("C://tshoot/utility/configProtocol.csv") as file_obj:
+            heading = next(file_obj)
+            reader_obj = csv.reader(file_obj)
+            for row in reader_obj:
+                if row[1] == self.__name:
+                    self.__dictProtocol.update({row[0] : Protocol(row[0], row[1], row[2], row[3], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])})
+          
+
+# Object class: one instance for each device or state-variable found in the datafile
+class Object:
+    # initialization
+    def __init__(self, pname):
+        self.__name = pname
+    # getters
+    def nameGetter(self):
+        return self.__name
+    def typeGetter(self):
+        return self.__type
+    def listPositionGetter(self):
+        return self.__listPosition
+    # setters
+    def nameSetter(self, pname):
+        self.__name = pname
+    def typeSetter(self, ptype):
+        self.__type = ptype
+    def listPositionSetter(self, plstpos):
+        self.__listPosition = plstpos
+    # check if position exists and add it if it does not
+    def addPosition(self, ppos):
+        if self.__listPosition.count(ppos) == 0:
+            self.__listPosition.append(ppos)
+
+
+# Protocol class: one instance for each saved protocol
+class Protocol:
+    # initialization; optional attributes default to NULL
+    def __init__(self, pname, pfile, pcntrS, pcntrE, pobjF=None, pposF=None, pflagC=0, pflagB=0, pflagT=0, pobjC=None, pposC=None, psizeB=None, pparamT=None, pvalT=None):
+        self.__path = "C://tshoot/utility/configProtocol.csv"
+        self.__name = pname
+        self.__file = pfile
+        self.__start = pcntrS
+        self.__end = pcntrE
+        self.__focusObject = pobjF
+        self.__focusPosition = pposF
+        self.__flagCondition = pflagC
+        self.__flagBucket = pflagB
+        self.__flagThreshold = pflagT
+        self.__conditionState = pobjC
+        self.__conditionPosition = pposC
+        self.__bucketSize = psizeB
+        self.__thresholdParameter = pparamT
+        self.__thresholdValue = pvalT
+    def getName(self):
+        return self.__name
+
+
+# Main functions
+######################################
+
+
+
+
+
+# Start main program
+######################################
+
+# Initial setup of the Datafile class instance
+datafile = Datafile()
+
+
+
+#??????????????? testing: check if dictionaries got made
+print(datafile.dictObjectGetter())
+print("\n")
+print(datafile.dictProtocolGetter())
+print("\n")
+#??????????????? testing: try to find the list of positions for a particular object associated with the datafile
+x = "KN Occupancy"
+print(datafile.dictObjectGetter().get(x).listPositionGetter()                 )
+exit()
+
+
+
+
+
+
+# Start GUI
+######################################
+
+# root window start
+root = Tk()
+root.title("IoT Troubleshooter")
+root.iconbitmap('c:/tshoot/logo.ico')
+root.geometry("600x600")
+
+# style configuration
+style = ttk.Style()
+style.theme_use('default')
+
+
+style.configure('Accept.TButton', background='olivedrab', foreground='black', padx=1, pady=1) 
+style.configure('Cancel.TButton', background='indian red', foreground="black", padx=1, pady=1)
+style.configure('Standard.TEntry', background='cornsilk', padx=1, pady=1)
+style.configure('Standard.TCombobox', background='cornsilk', padx=1, pady=1)
+style.configure('File.TFrame', background='slategray')
+style.configure('File.TLabel', background='darkslategray', foreground="white", padx=1, pady=1)
+style.configure('Protocol.TFrame', background='wheat')
+style.configure('Protocol.TLabel', background='burlywood', foreground="white", padx=1, pady=1)
+style.configure('Object.TFrame', background='skyblue')
+style.configure('Object.TLabel', background='steel blue', foreground="white", padx=1, pady=1)
+style.configure('Result.TFrame', background='orange')
+style.configure('Result.TLabel', background='orange red', foreground="white", padx=1, pady=1)
+
+
+# initial variable declarations & assignments
+directoryDatafiles=StringVar()
+directoryDatafiles.set("C://tshoot/datafiles")
+directoryUtility=StringVar()
+directoryUtility.set("C://tshoot/utility")
+datafileChoice=""
+datafileActive=""
+
+
+# menu bar functions
+def frameHider():
+    frameActivateFile.pack_forget()
+    frameActivateProtocol.pack_forget()
+    frameConstructProtocol.pack_forget()
+    frameRemoveObject.pack_forget()
+    frameViewResult.pack_forget()
+def fileActivator():
+    frameHider()
+    frameActivateFile.pack(fill='both',expand=1)
+def protocolActivator():
+    frameHider()
+    frameActivateProtocol.pack(fill='both',expand=1)
+def protocolConstructor():
+    frameHider()
+    frameConstructProtocol.pack(fill='both',expand=1)
+def objectRemover():
+    frameHider()
+    frameRemoveObject.pack(fill='both',expand=1)
+def resultViewer():
+    frameHider()
+    frameViewResult.pack(fill='both',expand=1)
+def exitExiter():
+    exit(0)
+
+
+# multi-frame widget functions
+def Canceller():
+    frameHider()
+
+
+# frameFilesActivator widget functions
+## coming from combobox fieldDatafile; assigns selection to choice attribute of datafile 
+def datafileActivateChooser(event):
+    datafile.choiceSetter(fieldDatafile.get())
+
+## coming from button buttonDatafileActivate; copies datafile's choice to name and activates
+def datafileActivateAccepter():
+   datafile.nameSetter()
+   datafile.activator()
+   frameHider()
+
+
+
+
+
+# widgets for menu bar
+## top menu
+menuTop = Menu(root)
+root.config(menu=menuTop)
+menuFiles = Menu(menuTop)
+menuProtocols=Menu(menuTop)
+menuObjects=Menu(menuTop)
+menuResults=Menu(menuTop)
+menuExit=Menu(menuTop)
+## files menus
+menuTop.add_cascade(label="Files", menu=menuFiles)
+menuFiles.add_command(label="Activate", command=fileActivator)
+## protocol menus
+menuTop.add_cascade(label="Protocols", menu=menuProtocols)
+menuProtocols.add_command(label="Activate", command=protocolActivator)
+menuProtocols.add_command(label="Construct", command=protocolConstructor)
+## object menus
+menuTop.add_cascade(label="Objects", menu=menuObjects)
+menuObjects.add_command(label="Remove", command=objectRemover)
+## results menus
+menuTop.add_cascade(label="Results", menu=menuResults)
+menuResults.add_command(label="View", command=resultViewer)
+## exit menus
+menuTop.add_cascade(label="Exit", menu=menuExit)
+menuExit.add_command(label="Exit", command=exitExiter)
+
+# frames
+frameActivateFile=ttk.Frame(root, style="File.TFrame")
+frameActivateProtocol=ttk.Frame(root, style="Protocol.TFrame")
+frameConstructProtocol=ttk.Frame(root, style="Protocol.TFrame")
+frameRemoveObject=ttk.Frame(root, style="Object.TFrame")
+frameViewResult=ttk.Frame(root, style="Result.TFrame")
+
+
+
+# widgets for frameActivateFile
+## label
+labelDatafile=ttk.Label(frameActivateFile, text="DataFile: ", style="File.TLabel")
+labelDatafile.place(relx=.02, rely=.04, relwidth=.2, relheight=.04)
+## entry box runs datafileChooser function, selected file is in textvariable of field
+fieldDatafile = ttk.Combobox(frameActivateFile, value=datafile.listDatafile, style="Standard.TCombobox")
+fieldDatafile.current(0)
+fieldDatafile.bind("<<ComboboxSelected>>", datafileActivateChooser)
+fieldDatafile.place(relx=.25, rely=.04, relwidth=.73, relheight=.04)
+
+buttonDatafileActivateAccept = ttk.Button(frameActivateFile, text="Accept", style="Accept.TButton", command=datafileActivateAccepter)
+buttonDatafileActivateAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+
+buttonDatafileActivateCancel = ttk.Button(frameActivateFile, text="Cancel", style="Cancel.TButton", command=Canceller)
+buttonDatafileActivateCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
+
+
+
+
+
+
+
+
+
+
+
+
+
+root.mainloop()
+
+
+
+
+"""
+# stub code for an entry field
+var=StringVar()
+var.set("default")
+def entryUpdater(event):
+    var = field.get()
+field = Entry(root)
+field.insert(0, var.get())
+field.bind("<Return>", entryUpdater)
+field.pack()
+"""
+
+"""
+# stub code for a combo box
+selection = ""
+def choose(event):
+    selection=combo.get()
+options = ["ONE", "TWO", "THREE"]
+combo = ttk.Combobox(root, value=options)
+combo.current(0)
+combo.bind("<<ComboboxSelected>>", choose)
+combo.pack()
+"""
+
+"""
+# stub code for option box
+options = ["ONE", "TWO", "THREE"]
+selection = StringVar()
+selection.set(options[0])
+drop = OptionMenu(frameActivateFile, selection, *options)
+drop.pack()
+"""
+
+"""
+#x# entry field that got discarded but worked
+labelDirDatafile=ttk.Label(frameActivateFile, text="Directory: ", style="File.TLabel")
+labelDirDatafile.place(relx=.02, rely=.04, relwidth=.2, relheight=.04)
+
+fieldDirDatafile = ttk.Entry(frameActivateFile, style="File.TEntry")
+fieldDirDatafile.insert(0, directoryDatafiles.get())
+fieldDirDatafile.bind("<Return>", dirDatafilesUpdater)
+fieldDirDatafile.place(relx=.25, rely=.04, relwidth=.73, relheight=.04)
+#x# function that went with it
+def dirDatafilesUpdater(event):
+    directoryDatafiles.set(fieldDirDatafile.get())
+    listDatafiles = fileLister(directoryDatafiles.get())
+    fieldDatafile['values']=listDatafiles
+"""
