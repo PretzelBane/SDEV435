@@ -8,11 +8,14 @@
 
 from ctypes.wintypes import PSIZE
 from distutils.cmd import Command
+from email.utils import parsedate_to_datetime
 import os
 from tkinter import *
 from tkinter import ttk
+from typing import Type
 import pandas as pd
 import csv
+from datetime import datetime
 
 
 # Classes
@@ -24,54 +27,102 @@ class Datafile:
     def __init__(self):
         self.__dir = "C://tshoot/datafiles"
         self.listDatafile = self.fileLister()
-        self.__choice = self.listDatafile[0]
+        self.__name = self.listDatafile[0]
+        self.__path = self.__dir + "/" + self.__name
         self.__dictObject ={}
-        self.__dictProtocol = {} 
-        self.nameSetter()
+        self.__listObject =[]
+        self.__dictDevice ={}
+        self.__listType =[]
+        self.__listTypeState =[]
+        self.__listTypeDevice =[]
+        self.__listDevice =[]
+        self.__dictProtocol ={}
+        self.__listProtocol =[]
         self.fileActivator()
     ## getters & setters
     ### choice is manipulated with GUI widgets; transferred to name upon acceptance
-    def choiceGetter(self):
-        return self.__choice
     def nameGetter(self):
         return self.__name
     def dictObjectGetter(self):
         return self.__dictObject
+    def listObjectGetter(self):
+        return self.__listObject
+    def dictDeviceGetter(self):
+        return self.__dictDevice
+    def listTypeGetter(self):
+        return self.__listType
+    def listTypeStateGetter(self):
+        return self.__listTypeState
+    def listTypeDeviceGetter(self):
+        return self.__listTypeDevice
     def dictProtocolGetter(self):
         return self.__dictProtocol
-    def choiceSetter(self, pname):
-        self.__choice = pname
-    def nameSetter(self):
-        self.__name = self.__choice
+    def listProtocolGetter(self):
+        return self.__listProtocol
+    def nameProtocolActiveGetter(self):
+        return self.__nameProtocolActive
+    def nameSetter(self, pname):
+        self.__name = pname
         self.__path = self.__dir + "/" + self.__name
-    ## acquires a list of csv files for display & selection purposes
+    def nameProtocolActiveSetter(self, pname):
+        self.__nameProtocolActive = pname
+    ## helper function t get list of csv filenames
     def fileLister(self):
         filelist = os.listdir(self.__dir)
         return [file for file in filelist if file.endswith(".csv")]
+    ## updates the device dictionary
+    def deviceDictUpdater(self, ptype, plist):
+        self.__dictDevice.update({ptype : plist})  
     ## activates a datafile
     def fileActivator(self):
         ### load the csv file into the dataframe (df)
         self.df = pd.read_csv(self.__path)
-        ### delete all existing object class instances
-        for name in self.__dictObject:
-            del self.__dictObject[name]
+        ## add at datetime column and populate from csv data
+        self.df['datetime'] = self.df['Month'].astype(str)+'.'+self.df['Day'].astype(str)+'.'+self.df['Year'].astype(str)+' '+self.df['Hour'].astype(str)+':'+self.df['Minute'].astype(str)+':'+self.df['Second'].astype(str)
+        self.df['datetime'] = pd.to_datetime(self.df['datetime'], infer_datetime_format=True)
         ## build a class for each unique object in the datafile
-        ### also create a new dictionary of name : class pairs for easy reference
+        ### also create a new dictionary of name : class pairs & a list of just objects for easy reference
+        self.__dictObject.clear()
+        self.__listObject.clear()
         for obj in self.df['Device'].unique():
             self.__dictObject.update({obj : Object(obj)})
+            self.__listObject.append(Object(obj))
         ### loop through the newly created object class instances and add type & list of positions to each
         for name, obj in self.__dictObject.items():
             self.__fdf = self.df[self.df.Device == name]
             obj.typeSetter(self.__fdf['Type'].iloc[0])
             obj.listPositionSetter(self.__fdf['Value'].unique())
+        ## build a lists of object types & a dictionary of types and their associated object names
+        ### build the type list
+        self.__listType.clear()
+        self.__dictDevice.clear()
+        for type in self.df['Type'].unique():
+            self.__listType.append(type)
+            if (type == "State"):
+                self.__listTypeState.append(type)
+            else:
+                self.__listTypeDevice.append(type)    
+        ### build the dictionary of types : list of devices
+        for type in self.__listType:
+            #### filter the dataframe to one of the types
+            self.__fdf = self.df[self.df.Type == type]
+            #### build a list of devices for the type
+            listDevice = []
+            for obj in self.__fdf['Device'].unique():
+                listDevice.append(obj)
+            #### add the type : list of devices to the dictionary    
+            self.deviceDictUpdater(type, listDevice)
         ## from the config file, load and create protocols previously created for this datafile       
         with open("C://tshoot/utility/configProtocol.csv") as file_obj:
             heading = next(file_obj)
             reader_obj = csv.reader(file_obj)
-            for row in reader_obj:
-                if row[1] == self.__name:
-                    self.__dictProtocol.update({row[0] : Protocol(row[0], row[1], row[2], row[3], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])})
-          
+            for col in reader_obj:
+                if col[1] == self.__name:
+                    dts = datetime(int(col[2]), int(col[3]), int(col[4]), int(col[5]), int(col[6]), int(col[7]), 0)
+                    dte = datetime(int(col[8]), int(col[9]), int(col[10]), int(col[11]), int(col[12]), int(col[13]), 0)
+                    self.__dictProtocol.update({col[0] : Protocol(col[0], col[1], col[2], col[3], col[4], col[5], col[6], col[7], col[8], col[9], col[10], col[11], col[12], col[13], dts, dte, col[14], col[15], col[16], col[17], col[18], col[19], col[20], col[21], col[22], col[23], col[24], col[25])})
+                    self.__listProtocol.append(col[0])
+                    self.__nameProtocolActive = col[0]
 
 # Object class: one instance for each device or state-variable found in the datafile
 class Object:
@@ -92,33 +143,100 @@ class Object:
         self.__type = ptype
     def listPositionSetter(self, plstpos):
         self.__listPosition = plstpos
-    # check if position exists and add it if it does not
-    def addPosition(self, ppos):
-        if self.__listPosition.count(ppos) == 0:
-            self.__listPosition.append(ppos)
 
 
 # Protocol class: one instance for each saved protocol
 class Protocol:
     # initialization; optional attributes default to NULL
-    def __init__(self, pname, pfile, pcntrS, pcntrE, pobjF=None, pposF=None, pflagC=0, pflagB=0, pflagT=0, pobjC=None, pposC=None, psizeB=None, pparamT=None, pvalT=None):
+    def __init__(self, pname, pfile, pyearS, pmonthS, pdayS, phourS, pminuteS, psecondS, pyearE, pmonthE, pdayE, phourE, pminuteE, psecondE, pdatetimeS, pdatetimeE, ptypeF=None, pobjF=None, pposF=None, pflagC=0, pflagB=0, pflagT=0, ptypeC=None, pobjC=None, pposC=None, psizeB=None, pparamT=None, pvalT=None):
         self.__path = "C://tshoot/utility/configProtocol.csv"
         self.__name = pname
         self.__file = pfile
-        self.__start = pcntrS
-        self.__end = pcntrE
+        self.__yearStart = pyearS
+        self.__monthStart = pmonthS
+        self.__dayStart = pdayS
+        self.__hourStart = phourS
+        self.__minuteStart = pminuteS
+        self.__secondStart = psecondS
+        self.__yearEnd = pyearE
+        self.__monthEnd = pmonthE
+        self.__dayEnd = pdayE
+        self.__hourEnd = phourE
+        self.__minuteEnd = pminuteE
+        self.__secondEnd = psecondE
+        self.__datetimeStart = pdatetimeS
+        self.__datetimeEnd = pdatetimeE
+        self.__focusType = ptypeF
         self.__focusObject = pobjF
         self.__focusPosition = pposF
         self.__flagCondition = pflagC
         self.__flagBucket = pflagB
         self.__flagThreshold = pflagT
-        self.__conditionState = pobjC
+        self.__conditionType = ptypeC
+        self.__conditionObject = pobjC
         self.__conditionPosition = pposC
         self.__bucketSize = psizeB
         self.__thresholdParameter = pparamT
         self.__thresholdValue = pvalT
-    def getName(self):
+    # getter functions
+    def nameGetter(self):
         return self.__name
+    def fileGetter(self):
+        return self.__file
+    def yearStartGetter(self):
+        return self.__yearStart
+    def monthStartGetter(self):
+        return self.__monthStart
+    def dayStartGetter(self):
+        return self.__dayStart
+    def hourStartGetter(self):
+        return self.__hourStart
+    def minuteStartGetter(self):
+        return self.__minuteStart
+    def secondStartGetter(self):
+        return self.__secondStart
+    def yearEndGetter(self):
+        return self.__yearEnd
+    def monthEndGetter(self):
+        return self.__monthEnd
+    def dayEndGetter(self):
+        return self.__dayEnd
+    def hourEndGetter(self):
+        return self.__hourEnd
+    def minuteEndGetter(self):
+        return self.__minuteEnd
+    def secondEndGetter(self):
+        return self.__secondEnd
+    def datetimeStartGetter(self):
+        return self.__datetimeStart
+    def datetimeEndGetter(self):
+        return self.__datetimeEnd
+    def focusTypeGetter(self):
+        return self.__focusType
+    def focusObjectGetter(self):
+        return self.__focusObject
+    def focusPositionGetter(self):
+        return self.__focusPosition
+    def flagConditionGetter(self):
+        return self.__flagCondition
+    def flagBucketGetter(self):
+        return self.__flagBucket
+    def flagThresholdGetter(self):
+        return self.__flagThreshold
+    def conditionTypeGetter(self):
+        return self.__conditionType
+    def conditionObjectGetter(self):
+        return self.__conditionObject
+    def conditionPositionGetter(self):
+        return self.__conditionPosition
+    def bucketSizeGetter(self):
+        return self.__bucketSize
+    def thresholdParameterGetter(self):
+        return self.__thresholdParameter
+    def thresholdValueGetter(self):
+        return self.__thresholdValue
+
+
 
 
 # Main functions
@@ -135,16 +253,22 @@ class Protocol:
 datafile = Datafile()
 
 
-
+#??????????????? testing: dataframe content/structure
+#print(datafile.df)
+#print(datafile.df.dtypes)
 #??????????????? testing: check if dictionaries got made
-print(datafile.dictObjectGetter())
-print("\n")
-print(datafile.dictProtocolGetter())
-print("\n")
+#print(datafile.listObjectGetter())
+#print("\n")
+#print(datafile.dictObjectGetter())
+#print("\n")
+#print(datafile.dictDeviceGetter())
+#print("\n")
+#print(datafile.dictProtocolGetter())
+#print("\n")
 #??????????????? testing: try to find the list of positions for a particular object associated with the datafile
-x = "KN Occupancy"
-print(datafile.dictObjectGetter().get(x).listPositionGetter()                 )
-exit()
+#x = "KN Occupancy"
+#print(datafile.dictObjectGetter().get(x).listPositionGetter())
+#exit()
 
 
 
@@ -160,21 +284,20 @@ root.title("IoT Troubleshooter")
 root.iconbitmap('c:/tshoot/logo.ico')
 root.geometry("600x600")
 
+
 # style configuration
 style = ttk.Style()
 style.theme_use('default')
-
 
 style.configure('Accept.TButton', background='olivedrab', foreground='black', padx=1, pady=1) 
 style.configure('Cancel.TButton', background='indian red', foreground="black", padx=1, pady=1)
 style.configure('Standard.TEntry', background='cornsilk', padx=1, pady=1)
 style.configure('Standard.TCombobox', background='cornsilk', padx=1, pady=1)
+style.configure('Standard.TCheckbutton', background='cornsilk', padx=1, pady=1, indicatordiameter='30', indicatormargin='0')
 style.configure('File.TFrame', background='slategray')
 style.configure('File.TLabel', background='darkslategray', foreground="white", padx=1, pady=1)
 style.configure('Protocol.TFrame', background='wheat')
 style.configure('Protocol.TLabel', background='burlywood', foreground="white", padx=1, pady=1)
-style.configure('Object.TFrame', background='skyblue')
-style.configure('Object.TLabel', background='steel blue', foreground="white", padx=1, pady=1)
 style.configure('Result.TFrame', background='orange')
 style.configure('Result.TLabel', background='orange red', foreground="white", padx=1, pady=1)
 
@@ -184,8 +307,26 @@ directoryDatafiles=StringVar()
 directoryDatafiles.set("C://tshoot/datafiles")
 directoryUtility=StringVar()
 directoryUtility.set("C://tshoot/utility")
-datafileChoice=""
-datafileActive=""
+#datafileChoice=""     <-- I don't think these are used anymore
+#datafileActive=""
+txtvarActive = StringVar()
+txtvarActive.set(datafile.nameGetter() + " -> " + datafile.nameProtocolActiveGetter())
+# text & integer variables for the protocol constructor frame
+txtYearStart = StringVar()
+txtMonthStart = StringVar()
+txtDayStart = StringVar()
+txtHourStart = StringVar()
+txtMinuteStart = StringVar()
+txtSecondStart = StringVar()
+txtYearEnd = StringVar()
+txtMonthEnd = StringVar()
+txtDayEnd = StringVar()
+txtHourEnd = StringVar()
+txtMinuteEnd = StringVar()
+txtSecondEnd = StringVar()
+intFlagCond = IntVar()
+
+
 
 
 # menu bar functions
@@ -193,7 +334,6 @@ def frameHider():
     frameActivateFile.pack_forget()
     frameActivateProtocol.pack_forget()
     frameConstructProtocol.pack_forget()
-    frameRemoveObject.pack_forget()
     frameViewResult.pack_forget()
 def fileActivator():
     frameHider()
@@ -201,12 +341,39 @@ def fileActivator():
 def protocolActivator():
     frameHider()
     frameActivateProtocol.pack(fill='both',expand=1)
+    ## default field contents to the active protocol
+    fieldProtocol.set(datafile.nameProtocolActiveGetter())
 def protocolConstructor():
     frameHider()
     frameConstructProtocol.pack(fill='both',expand=1)
-def objectRemover():
-    frameHider()
-    frameRemoveObject.pack(fill='both',expand=1)
+    ## update textvariables to parameters associated with the active protocol
+    txtYearStart.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).yearStartGetter())
+    txtMonthStart.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).monthStartGetter())
+    txtDayStart.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).dayStartGetter())
+    txtHourStart.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).hourStartGetter())
+    txtMinuteStart.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).minuteStartGetter())
+    txtSecondStart.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).secondStartGetter())
+    txtYearEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).yearEndGetter())
+    txtMonthEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).monthEndGetter())
+    txtDayEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).dayEndGetter())
+    txtHourEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).hourEndGetter())
+    txtMinuteEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).minuteEndGetter())
+    txtSecondEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).secondEndGetter())
+    intFlagCond.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagConditionGetter())
+    fieldFocusType.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusTypeGetter())
+    fieldFocusObject.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusObjectGetter())
+    fieldFocusPosition.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusPositionGetter())
+    fieldConditionType.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionTypeGetter())
+    fieldConditionObject.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionObjectGetter())
+    fieldConditionPosition.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionPositionGetter())
+
+    ## pre-set the value lists for dependent comboboxes
+    fieldFocusObject['value'] = datafile.dictDeviceGetter().get(fieldFocusType.get())
+    fieldConditionObject['value'] = datafile.dictDeviceGetter().get(fieldConditionType.get())
+    ## get the checkboxes to show as unchecked
+    #checkCondition.invoke()
+    #checkCondition.invoke()
+    
 def resultViewer():
     frameHider()
     frameViewResult.pack(fill='both',expand=1)
@@ -215,32 +382,108 @@ def exitExiter():
 
 
 # multi-frame widget functions
-def Canceller():
+def canceller():
     frameHider()
 
 
-# frameFilesActivator widget functions
-## coming from combobox fieldDatafile; assigns selection to choice attribute of datafile 
-def datafileActivateChooser(event):
-    datafile.choiceSetter(fieldDatafile.get())
 
-## coming from button buttonDatafileActivate; copies datafile's choice to name and activates
+
+# frameFilesActivator widget functions
+## coming from button buttonAccept; sets name and activates
 def datafileActivateAccepter():
-   datafile.nameSetter()
-   datafile.activator()
+   datafile.nameSetter(fieldDatafile.get())
+   datafile.fileActivator()
+   txtvarActive.set(fieldDatafile.get() + " -> " + datafile.nameProtocolActiveGetter())
    frameHider()
 
+# frameProtocolActivator widget functions
+## coming from button buttonAccept; sets active protocol in datafile
+def protocolActivateAccepter():
+    datafile.nameProtocolActiveSetter(fieldProtocol.get())
+    txtvarActive.set(datafile.nameGetter() + " -> " + datafile.nameProtocolActiveGetter())
 
+# frameProtocolCreator widget functions
+## coming from button buttonAccept;
+def protocolCreateAccepter():
+    return
+## field entry validation functions
+def startYearValidator(input): 
+    if ((input.isdigit() and int(input)>=2023) or input == ""): return True
+    else: entryStartYear.delete(0, END); return False
+sYearVal = root.register(startYearValidator)
+def endYearValidator(input): 
+    if ((input.isdigit() and int(input)>=2023) or input == ""): return True
+    else: entryEndYear.delete(0, END); return False
+eYearVal = root.register(endYearValidator)
+def startMonthValidator(input): 
+    if ((input.isdigit() and int(input)>=1 and int(input)<=12) or input == ""): return True
+    else: entryStartMonth.delete(0, END); return False
+sMonthVal = root.register(startMonthValidator)
+def endMonthValidator(input): 
+    if ((input.isdigit() and int(input)>=1 and int(input)<=12) or input == ""): return True
+    else: entryEndMonth.delete(0, END); return False
+eMonthVal = root.register(endMonthValidator)
+def startDayValidator(input): 
+    if ((input.isdigit() and int(input)>=1 and int(input)<=31) or input == ""): return True
+    else: entryStartDay.delete(0, END); return False
+sDayVal = root.register(startDayValidator)
+def endDayValidator(input): 
+    if ((input.isdigit() and int(input)>=1 and int(input)<=31) or input == ""): return True
+    else: entryEndDay.delete(0, END); return False
+eDayVal = root.register(endDayValidator)
+def startHourValidator(input): 
+    if ((input.isdigit() and int(input)>=0 and int(input)<=12) or input == ""): return True
+    else: entryStartHour.delete(0, END); return False
+sHourVal = root.register(startHourValidator)
+def endHourValidator(input): 
+    if ((input.isdigit() and int(input)>=0 and int(input)<=12) or input == ""): return True
+    else: entryEndHour.delete(0, END); return False
+eHourVal = root.register(endHourValidator)
+def startMinuteValidator(input): 
+    if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
+    else: entryStartMinute.delete(0, END); return False
+sMinuteVal = root.register(startMinuteValidator)
+def endMinuteValidator(input): 
+    if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
+    else: entryEndMinute.delete(0, END); return False
+eMinuteVal = root.register(endMinuteValidator)
+def startSecondValidator(input): 
+    if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
+    else: entryStartSecond.delete(0, END); return False
+sSecondVal = root.register(startSecondValidator)
+def endSecondValidator(input): 
+    if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
+    else: entryEndSecond.delete(0, END); return False
+eSecondVal = root.register(endSecondValidator)
+## clean and update picklists for downstream comboboxes
+def focusTypeChooser(event):
+    fieldFocusObject['value'] = datafile.dictDeviceGetter().get(fieldFocusType.get())
+    fieldFocusObject.set("")
+    fieldFocusPosition.set("")
+def focusObjectChooser(event):
+    listTemp = []
+    for pos in datafile.dictObjectGetter().get(fieldFocusObject.get()).listPositionGetter():
+        listTemp.append(pos) 
+    fieldFocusPosition['value'] = listTemp
+    fieldFocusPosition.set("")
+def conditionTypeChooser(event):
+    fieldConditionObject['value'] = datafile.dictDeviceGetter().get(fieldConditionType.get())
+    fieldConditionObject.set("")
+    fieldConditionPosition.set("")
+def conditionObjectChooser(event):
+    listTemp = []
+    for pos in datafile.dictObjectGetter().get(fieldConditionObject.get()).listPositionGetter():
+        listTemp.append(pos) 
+    fieldConditionPosition['value'] = listTemp
+    fieldConditionPosition.set("")
 
-
-
+    
 # widgets for menu bar
 ## top menu
 menuTop = Menu(root)
 root.config(menu=menuTop)
 menuFiles = Menu(menuTop)
 menuProtocols=Menu(menuTop)
-menuObjects=Menu(menuTop)
 menuResults=Menu(menuTop)
 menuExit=Menu(menuTop)
 ## files menus
@@ -250,9 +493,6 @@ menuFiles.add_command(label="Activate", command=fileActivator)
 menuTop.add_cascade(label="Protocols", menu=menuProtocols)
 menuProtocols.add_command(label="Activate", command=protocolActivator)
 menuProtocols.add_command(label="Construct", command=protocolConstructor)
-## object menus
-menuTop.add_cascade(label="Objects", menu=menuObjects)
-menuObjects.add_command(label="Remove", command=objectRemover)
 ## results menus
 menuTop.add_cascade(label="Results", menu=menuResults)
 menuResults.add_command(label="View", command=resultViewer)
@@ -264,30 +504,162 @@ menuExit.add_command(label="Exit", command=exitExiter)
 frameActivateFile=ttk.Frame(root, style="File.TFrame")
 frameActivateProtocol=ttk.Frame(root, style="Protocol.TFrame")
 frameConstructProtocol=ttk.Frame(root, style="Protocol.TFrame")
-frameRemoveObject=ttk.Frame(root, style="Object.TFrame")
 frameViewResult=ttk.Frame(root, style="Result.TFrame")
 
 
 
 # widgets for frameActivateFile
-## label
-labelDatafile=ttk.Label(frameActivateFile, text="DataFile: ", style="File.TLabel")
-labelDatafile.place(relx=.02, rely=.04, relwidth=.2, relheight=.04)
-## entry box runs datafileChooser function, selected file is in textvariable of field
+## banner
+bannerActivateFileL=ttk.Label(frameActivateFile, text="Datafile / Activate", style="File.TLabel")
+bannerActivateFileL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
+bannerActivateFileR=ttk.Label(frameActivateFile, textvariable=txtvarActive, style="File.TLabel", anchor=E)
+bannerActivateFileR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
+## labels
+labelDatafile=ttk.Label(frameActivateFile, text="DataFile", style="File.TLabel")
+labelDatafile.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
+## input fields
+### datafile selection combobox runs datafileChooser function, selected file is in textvariable of field
 fieldDatafile = ttk.Combobox(frameActivateFile, value=datafile.listDatafile, style="Standard.TCombobox")
 fieldDatafile.current(0)
-fieldDatafile.bind("<<ComboboxSelected>>", datafileActivateChooser)
-fieldDatafile.place(relx=.25, rely=.04, relwidth=.73, relheight=.04)
-
-buttonDatafileActivateAccept = ttk.Button(frameActivateFile, text="Accept", style="Accept.TButton", command=datafileActivateAccepter)
-buttonDatafileActivateAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
-
-buttonDatafileActivateCancel = ttk.Button(frameActivateFile, text="Cancel", style="Cancel.TButton", command=Canceller)
-buttonDatafileActivateCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
+fieldDatafile.place(relx=.25, rely=.06, relwidth=.73, relheight=.04)
+## accept & cancel buttons
+buttonAccept = ttk.Button(frameActivateFile, text="Accept", style="Accept.TButton", command=datafileActivateAccepter)
+buttonAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonCancel = ttk.Button(frameActivateFile, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
+# widgets for frameActivateProtocol
+## banner
+bannerActivateProtocolL=ttk.Label(frameActivateProtocol, text="Protocol / Activate", style="Protocol.TLabel")
+bannerActivateProtocolL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
+bannerActivateProtocolR=ttk.Label(frameActivateProtocol, textvariable=txtvarActive, style="Protocol.TLabel", anchor=E)
+bannerActivateProtocolR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
+## labels
+labelProtocol=ttk.Label(frameActivateProtocol, text="Protocol", style="Protocol.TLabel")
+labelProtocol.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
+## input fields
+### datafile selection combobox runs datafileChooser function, selected file is in textvariable of field
+fieldProtocol = ttk.Combobox(frameActivateProtocol, value=datafile.listProtocolGetter(), style="Standard.TCombobox")
+fieldProtocol.current(0)
+fieldProtocol.place(relx=.25, rely=.06, relwidth=.73, relheight=.04)
+## accept & cancel buttons
+buttonAccept = ttk.Button(frameActivateProtocol, text="Accept", style="Accept.TButton", command=protocolActivateAccepter)
+buttonAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonCancel = ttk.Button(frameActivateProtocol, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
+
+
+# widgets for ConstructProtocol
+## banner
+bannerConstructProtocolL=ttk.Label(frameConstructProtocol, text="Protocol / Construct", style="Protocol.TLabel")
+bannerConstructProtocolL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
+bannerConstructProtocolR=ttk.Label(frameConstructProtocol, textvariable=txtvarActive, style="Protocol.TLabel", anchor=E)
+bannerConstructProtocolR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
+## labels
+labelStart=ttk.Label(frameConstructProtocol, text="Start", style="Protocol.TLabel")
+labelStart.place(relx=.02, rely=.12, relwidth=.15, relheight=.04)
+labelEnd=ttk.Label(frameConstructProtocol, text="End", style="Protocol.TLabel")
+labelEnd.place(relx=.02, rely=.18, relwidth=.15, relheight=.04)
+labelYear=ttk.Label(frameConstructProtocol, text="Year", style="Protocol.TLabel")
+labelYear.place(relx=.25, rely=.06, relwidth=.08, relheight=.04)
+labelMonth=ttk.Label(frameConstructProtocol, text="Month", style="Protocol.TLabel")
+labelMonth.place(relx=.35, rely=.06, relwidth=.08, relheight=.04)
+labelDay=ttk.Label(frameConstructProtocol, text="Day", style="Protocol.TLabel")
+labelDay.place(relx=.45, rely=.06, relwidth=.08, relheight=.04)
+labelHour=ttk.Label(frameConstructProtocol, text="Hour", style="Protocol.TLabel")
+labelHour.place(relx=.55, rely=.06, relwidth=.08, relheight=.04)
+labelMinute=ttk.Label(frameConstructProtocol, text="Minute", style="Protocol.TLabel")
+labelMinute.place(relx=.65, rely=.06, relwidth=.08, relheight=.04)
+labelSecond=ttk.Label(frameConstructProtocol, text="Second", style="Protocol.TLabel")
+labelSecond.place(relx=.75, rely=.06, relwidth=.08, relheight=.04)
+
+labelFocus=ttk.Label(frameConstructProtocol, text="Focus", style="Protocol.TLabel")
+labelFocus.place(relx=.02, rely=.30, relwidth=.15, relheight=.04)
+labelCondition=ttk.Label(frameConstructProtocol, text="Condition", style="Protocol.TLabel")
+labelCondition.place(relx=.02, rely=.36, relwidth=.15, relheight=.04)
+labelType=ttk.Label(frameConstructProtocol, text="Type", style="Protocol.TLabel")
+labelType.place(relx=.25, rely=.24, relwidth=.18, relheight=.04)
+labelObject=ttk.Label(frameConstructProtocol, text="Object", style="Protocol.TLabel")
+labelObject.place(relx=.45, rely=.24, relwidth=.28, relheight=.04)
+labelPosition=ttk.Label(frameConstructProtocol, text="Position", style="Protocol.TLabel")
+labelPosition.place(relx=.75, rely=.24, relwidth=.18, relheight=.04)
+
+
+
+## input fields
+entryStartYear=ttk.Entry(frameConstructProtocol, textvariable=txtYearStart, style="Standard.TEntry")
+entryStartYear.place(relx=.25, rely=.12, relwidth=.08, relheight=.04)
+entryStartYear.config(validate="focusout", validatecommand=(sYearVal, '%P'))
+entryEndYear=ttk.Entry(frameConstructProtocol, textvariable=txtYearEnd, style="Standard.TEntry")
+entryEndYear.place(relx=.25, rely=.18, relwidth=.08, relheight=.04)
+entryEndYear.config(validate="focusout", validatecommand=(eYearVal, '%P'))
+entryStartMonth=ttk.Entry(frameConstructProtocol, textvariable=txtMonthStart, style="Standard.TEntry")
+entryStartMonth.place(relx=.35, rely=.12, relwidth=.08, relheight=.04)
+entryStartMonth.config(validate="focusout", validatecommand=(sMonthVal, '%P'))
+entryEndMonth=ttk.Entry(frameConstructProtocol, textvariable=txtMonthEnd, style="Standard.TEntry")
+entryEndMonth.place(relx=.35, rely=.18, relwidth=.08, relheight=.04)
+entryEndMonth.config(validate="focusout", validatecommand=(eMonthVal, '%P'))
+entryStartDay=ttk.Entry(frameConstructProtocol, textvariable=txtDayStart, style="Standard.TEntry")
+entryStartDay.place(relx=.45, rely=.12, relwidth=.08, relheight=.04)
+entryStartDay.config(validate="focusout", validatecommand=(sDayVal, '%P'))
+entryEndDay=ttk.Entry(frameConstructProtocol, textvariable=txtDayEnd, style="Standard.TEntry")
+entryEndDay.place(relx=.45, rely=.18, relwidth=.08, relheight=.04)
+entryEndDay.config(validate="focusout", validatecommand=(eDayVal, '%P'))
+entryStartHour=ttk.Entry(frameConstructProtocol, textvariable=txtHourStart, style="Standard.TEntry")
+entryStartHour.place(relx=.55, rely=.12, relwidth=.08, relheight=.04)
+entryStartHour.config(validate="focusout", validatecommand=(sHourVal, '%P'))
+entryEndHour=ttk.Entry(frameConstructProtocol, textvariable=txtHourEnd, style="Standard.TEntry")
+entryEndHour.place(relx=.55, rely=.18, relwidth=.08, relheight=.04)
+entryEndHour.config(validate="focusout", validatecommand=(eHourVal, '%P'))
+entryStartMinute=ttk.Entry(frameConstructProtocol, textvariable=txtMinuteStart, style="Standard.TEntry")
+entryStartMinute.place(relx=.65, rely=.12, relwidth=.08, relheight=.04)
+entryStartMinute.config(validate="focusout", validatecommand=(sMinuteVal, '%P'))
+entryEndMinute=ttk.Entry(frameConstructProtocol, textvariable=txtMinuteEnd, style="Standard.TEntry")
+entryEndMinute.place(relx=.65, rely=.18, relwidth=.08, relheight=.04)
+entryEndMinute.config(validate="focusout", validatecommand=(eMinuteVal, '%P'))
+entryStartSecond=ttk.Entry(frameConstructProtocol, textvariable=txtSecondStart, style="Standard.TEntry")
+entryStartSecond.place(relx=.75, rely=.12, relwidth=.08, relheight=.04)
+entryStartSecond.config(validate="focusout", validatecommand=(sSecondVal, '%P'))
+entryEndSecond=ttk.Entry(frameConstructProtocol, textvariable=txtSecondEnd, style="Standard.TEntry")
+entryEndSecond.place(relx=.75, rely=.18, relwidth=.08, relheight=.04)
+entryEndSecond.config(validate="focusout", validatecommand=(eSecondVal, '%P'))
+
+fieldFocusType = ttk.Combobox(frameConstructProtocol, value=datafile.listTypeDeviceGetter(), style="Standard.TCombobox")
+fieldFocusType.current(0)
+fieldFocusType.bind("<<ComboboxSelected>>", focusTypeChooser)
+fieldFocusType.place(relx=.25, rely=.30, relwidth=.18, relheight=.04)
+fieldFocusObject = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldFocusObject.bind("<<ComboboxSelected>>", focusObjectChooser)
+fieldFocusObject.place(relx=.45, rely=.30, relwidth=.28, relheight=.04)
+fieldFocusPosition = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldFocusPosition.place(relx=.75, rely=.30, relwidth=.18, relheight=.04)
+
+checkCondition = ttk.Checkbutton(frameConstructProtocol, variable = intFlagCond, style ="Standard.TCheckbutton", onvalue=1, offvalue=0)
+checkCondition.place(relx=.19, rely=.36, relwidth=.04, relheight=.04)
+
+fieldConditionType = ttk.Combobox(frameConstructProtocol, value=datafile.listTypeStateGetter(), style="Standard.TCombobox")
+fieldConditionType.current(0)
+fieldConditionType.bind("<<ComboboxSelected>>", conditionTypeChooser)
+fieldConditionType.place(relx=.25, rely=.36, relwidth=.18, relheight=.04)
+fieldConditionObject = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldConditionObject.bind("<<ComboboxSelected>>", conditionObjectChooser)
+fieldConditionObject.place(relx=.45, rely=.36, relwidth=.28, relheight=.04)
+fieldConditionPosition = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldConditionPosition.place(relx=.75, rely=.36, relwidth=.18, relheight=.04)
+
+
+
+
+
+
+## accept & cancel buttons
+buttonAccept = ttk.Button(frameConstructProtocol, text="Accept", style="Accept.TButton", command=protocolCreateAccepter)
+buttonAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonCancel = ttk.Button(frameConstructProtocol, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
 
