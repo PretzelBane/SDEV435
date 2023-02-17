@@ -11,11 +11,12 @@ from distutils.cmd import Command
 from email.utils import parsedate_to_datetime
 import os
 from tkinter import *
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from typing import Type
 import pandas as pd
 import csv
 from datetime import datetime
+import re
 
 
 # Classes
@@ -38,11 +39,17 @@ class Datafile:
         self.__listDevice =[]
         self.__dictProtocol ={}
         self.__listProtocol =[]
+        self.__mode = "Present"
+        self.__listMode = ["Present", "Highlight"]
         self.fileActivator()
     ## getters & setters
     ### choice is manipulated with GUI widgets; transferred to name upon acceptance
     def nameGetter(self):
         return self.__name
+    def modeGetter(self):
+        return self.__mode
+    def listModeGetter(self):
+        return self.__listMode
     def dictObjectGetter(self):
         return self.__dictObject
     def listObjectGetter(self):
@@ -64,6 +71,8 @@ class Datafile:
     def nameSetter(self, pname):
         self.__name = pname
         self.__path = self.__dir + "/" + self.__name
+    def modeSetter(self, pmode):
+        self.__mode = pmode
     def nameProtocolActiveSetter(self, pname):
         self.__nameProtocolActive = pname
     ## helper function t get list of csv filenames
@@ -123,6 +132,15 @@ class Datafile:
                     self.__dictProtocol.update({col[0] : Protocol(col[0], col[1], col[2], col[3], col[4], col[5], col[6], col[7], col[8], col[9], col[10], col[11], col[12], col[13], dts, dte, col[14], col[15], col[16], col[17], col[18], col[19], col[20], col[21], col[22], col[23], col[24], col[25])})
                     self.__listProtocol.append(col[0])
                     self.__nameProtocolActive = col[0]
+    def protocolAdder(self, pname):
+        ## set some default dates
+        dts = datetime(2023, 1, 1, 0, 0, 0, 0)
+        dte = datetime(2023, 1, 1, 0, 0, 0, 0)
+        ## create the object while adding to dictionary then also add name to list and make it active
+        self.__dictProtocol.update({pname : Protocol("", datafile.nameGetter(), "2023", "1", "1", "0", "0", "0", "2023", "1", "1", "0", "0", "0", dts, dte, "", "", "", 0, 0, 0, "", "", "", "", "", 0)})
+        self.__listProtocol.append(pname)
+        self.__nameProtocolActive = pname
+
 
 # Object class: one instance for each device or state-variable found in the datafile
 class Object:
@@ -235,6 +253,34 @@ class Protocol:
         return self.__thresholdParameter
     def thresholdValueGetter(self):
         return self.__thresholdValue
+    def protocolUpdater(self, pname, pyearS, pmonthS, pdayS, phourS, pminuteS, psecondS, pyearE, pmonthE, pdayE, phourE, pminuteE, psecondE, pdatetimeS, pdatetimeE, ptypeF=None, pobjF=None, pposF=None, pflagC=0, pflagB=0, pflagT=0, ptypeC=None, pobjC=None, pposC=None, psizeB=None, pparamT=None, pvalT=None):
+        self.__name = pname
+        self.__yearStart = pyearS
+        self.__monthStart = pmonthS
+        self.__dayStart = pdayS
+        self.__hourStart = phourS
+        self.__minuteStart = pminuteS
+        self.__secondStart = psecondS
+        self.__yearEnd = pyearE
+        self.__monthEnd = pmonthE
+        self.__dayEnd = pdayE
+        self.__hourEnd = phourE
+        self.__minuteEnd = pminuteE
+        self.__secondEnd = psecondE
+        self.__datetimeStart = pdatetimeS
+        self.__datetimeEnd = pdatetimeE
+        self.__focusType = ptypeF
+        self.__focusObject = pobjF
+        self.__focusPosition = pposF
+        self.__flagCondition = pflagC
+        self.__flagBucket = pflagB
+        self.__flagThreshold = pflagT
+        self.__conditionType = ptypeC
+        self.__conditionObject = pobjC
+        self.__conditionPosition = pposC
+        self.__bucketSize = psizeB
+        self.__thresholdParameter = pparamT
+        self.__thresholdValue = pvalT
 
 
 
@@ -253,27 +299,6 @@ class Protocol:
 datafile = Datafile()
 
 
-#??????????????? testing: dataframe content/structure
-#print(datafile.df)
-#print(datafile.df.dtypes)
-#??????????????? testing: check if dictionaries got made
-#print(datafile.listObjectGetter())
-#print("\n")
-#print(datafile.dictObjectGetter())
-#print("\n")
-#print(datafile.dictDeviceGetter())
-#print("\n")
-#print(datafile.dictProtocolGetter())
-#print("\n")
-#??????????????? testing: try to find the list of positions for a particular object associated with the datafile
-#x = "KN Occupancy"
-#print(datafile.dictObjectGetter().get(x).listPositionGetter())
-#exit()
-
-
-
-
-
 
 # Start GUI
 ######################################
@@ -285,6 +310,9 @@ root.iconbitmap('c:/tshoot/logo.ico')
 root.geometry("600x600")
 
 
+# ttk Styles
+######################################
+
 # style configuration
 style = ttk.Style()
 style.theme_use('default')
@@ -294,12 +322,16 @@ style.configure('Cancel.TButton', background='indian red', foreground="black", p
 style.configure('Standard.TEntry', background='cornsilk', padx=1, pady=1)
 style.configure('Standard.TCombobox', background='cornsilk', padx=1, pady=1)
 style.configure('Standard.TCheckbutton', background='cornsilk', padx=1, pady=1, indicatordiameter='30', indicatormargin='0')
-style.configure('File.TFrame', background='slategray')
-style.configure('File.TLabel', background='darkslategray', foreground="white", padx=1, pady=1)
-style.configure('Protocol.TFrame', background='wheat')
-style.configure('Protocol.TLabel', background='burlywood', foreground="white", padx=1, pady=1)
-style.configure('Result.TFrame', background='orange')
-style.configure('Result.TLabel', background='orange red', foreground="white", padx=1, pady=1)
+style.configure('File.TFrame', background='lightsteelblue')
+style.configure('File.TLabel', background='lightsteelblue4', foreground="white", padx=1, pady=1)
+style.configure('Protocol.TFrame', background='sienna1')
+style.configure('Protocol.TLabel', background='sienna4', foreground="white", padx=1, pady=1)
+style.configure('Result.TFrame', background='mediumPurple1')
+style.configure('Result.TLabel', background='mediumpurple4', foreground="white", padx=1, pady=1)
+
+
+# Initial Declarations
+######################################
 
 
 # initial variable declarations & assignments
@@ -307,10 +339,13 @@ directoryDatafiles=StringVar()
 directoryDatafiles.set("C://tshoot/datafiles")
 directoryUtility=StringVar()
 directoryUtility.set("C://tshoot/utility")
-#datafileChoice=""     <-- I don't think these are used anymore
-#datafileActive=""
+# text variables for frame widgets
 txtvarActive = StringVar()
 txtvarActive.set(datafile.nameGetter() + " -> " + datafile.nameProtocolActiveGetter())
+txtvarFile = StringVar()
+txtvarFile.set(datafile.nameGetter())
+txtvarProtocol = StringVar()
+txtvarProtocol.set(datafile.nameProtocolActiveGetter())
 # text & integer variables for the protocol constructor frame
 txtYearStart = StringVar()
 txtMonthStart = StringVar()
@@ -325,24 +360,30 @@ txtHourEnd = StringVar()
 txtMinuteEnd = StringVar()
 txtSecondEnd = StringVar()
 intFlagCond = IntVar()
+txtProtocolName = StringVar()
 
 
-
+# GUI Functions
+######################################
 
 # menu bar functions
 def frameHider():
     frameActivateFile.pack_forget()
+    frameNewProtocol.pack_forget()
     frameActivateProtocol.pack_forget()
     frameConstructProtocol.pack_forget()
     frameViewResult.pack_forget()
 def fileActivator():
     frameHider()
     frameActivateFile.pack(fill='both',expand=1)
+def protocolNew():
+    frameHider()
+    frameNewProtocol.pack(fill='both',expand=1)
 def protocolActivator():
     frameHider()
     frameActivateProtocol.pack(fill='both',expand=1)
     ## default field contents to the active protocol
-    fieldProtocol.set(datafile.nameProtocolActiveGetter())
+    fieldAPProtocol.set(datafile.nameProtocolActiveGetter())
 def protocolConstructor():
     frameHider()
     frameConstructProtocol.pack(fill='both',expand=1)
@@ -360,20 +401,20 @@ def protocolConstructor():
     txtMinuteEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).minuteEndGetter())
     txtSecondEnd.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).secondEndGetter())
     intFlagCond.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagConditionGetter())
-    fieldFocusType.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusTypeGetter())
-    fieldFocusObject.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusObjectGetter())
-    fieldFocusPosition.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusPositionGetter())
-    fieldConditionType.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionTypeGetter())
-    fieldConditionObject.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionObjectGetter())
-    fieldConditionPosition.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionPositionGetter())
-
+    txtProtocolName.set(datafile.nameProtocolActiveGetter())
+    ## set some fields to pre-populate
+    fieldCPFocusType.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusTypeGetter())
+    fieldCPFocusObject.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusObjectGetter())
+    fieldCPFocusPosition.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).focusPositionGetter())
+    fieldCPConditionType.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionTypeGetter())
+    fieldCPConditionObject.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionObjectGetter())
+    fieldCPConditionPosition.set(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).conditionPositionGetter())
     ## pre-set the value lists for dependent comboboxes
-    fieldFocusObject['value'] = datafile.dictDeviceGetter().get(fieldFocusType.get())
-    fieldConditionObject['value'] = datafile.dictDeviceGetter().get(fieldConditionType.get())
-    ## get the checkboxes to show as unchecked
-    #checkCondition.invoke()
-    #checkCondition.invoke()
-    
+    fieldCPFocusObject['value'] = datafile.dictDeviceGetter().get(fieldCPFocusType.get())
+    fieldCPConditionObject['value'] = datafile.dictDeviceGetter().get(fieldCPConditionType.get())
+def resultModeChanger():
+    frameHider()
+    frameChangeResultMode.pack(fill='both',expand=1)
 def resultViewer():
     frameHider()
     frameViewResult.pack(fill='both',expand=1)
@@ -388,94 +429,176 @@ def canceller():
 
 
 
-# frameFilesActivator widget functions
+# frameActivateFile widget functions
 ## coming from button buttonAccept; sets name and activates
 def datafileActivateAccepter():
-   datafile.nameSetter(fieldDatafile.get())
+   datafile.nameSetter(fieldAFDatafile.get())
    datafile.fileActivator()
-   txtvarActive.set(fieldDatafile.get() + " -> " + datafile.nameProtocolActiveGetter())
+   txtvarActive.set(fieldAFDatafile.get() + " -> " + datafile.nameProtocolActiveGetter())
+   txtvarFile.set(datafile.nameGetter())
    frameHider()
 
-# frameProtocolActivator widget functions
+# frameNewProtocol widget functions
+## coming from button buttonAccept; creates a new protocol object and brings up the constructor frame
+def protocolNewAccepter():
+    ### validate name; check that it's not already in use for the active datafile
+    error = 0
+    for name in datafile.listProtocolGetter():
+        if (name == entryNPName.get()):
+            error = 1
+            messagebox.showerror("Error","Duplicate Name")
+            break
+    if (error == 0):
+        ### create a new, generic protocol & designate it as active
+        datafile.protocolAdder(entryNPName.get())
+        ### open the constructor frame and populate with the newly-created, generic data; ready for entry
+        protocolConstructor()
+        ### update widget values
+        txtvarActive.set(datafile.nameGetter() + " -> " + datafile.nameProtocolActiveGetter())
+        txtvarProtocol.set(datafile.nameProtocolActiveGetter())
+        fieldAPProtocol['values'] = datafile.listProtocolGetter()
+
+# frameActivateProtocol widget functions
 ## coming from button buttonAccept; sets active protocol in datafile
 def protocolActivateAccepter():
-    datafile.nameProtocolActiveSetter(fieldProtocol.get())
+    datafile.nameProtocolActiveSetter(fieldAPProtocol.get())
     txtvarActive.set(datafile.nameGetter() + " -> " + datafile.nameProtocolActiveGetter())
+    txtvarProtocol.set(datafile.nameProtocolActiveGetter())
+    ###... add actions to apply activated protocol to datafile
+    frameHider()
 
-# frameProtocolCreator widget functions
+# frameConstructProtocol widget functions
 ## coming from button buttonAccept;
-def protocolCreateAccepter():
-    return
+def protocolConstructAccepter():
+    # validate entries
+    error = 0
+    ## check for blank fields
+    if (entryCPStartYear.get() == "" or entryCPStartMonth.get() == "" or entryCPStartDay.get() == "" or entryCPStartHour.get() == "" or entryCPStartMinute.get() == "" or entryCPStartSecond.get() == ""):
+        error = 1
+        messagebox.showerror("Error","Start-date contains blank")
+    if (entryCPEndYear.get() == "" or entryCPEndMonth.get() == "" or entryCPEndDay.get() == "" or entryCPEndHour.get() == "" or entryCPEndMinute.get() == "" or entryCPEndSecond.get() == ""):
+        error = 1
+        messagebox.showerror("Error","End-date contains blank")
+    if (fieldCPFocusType.get() == "" or fieldCPFocusObject.get() == "" or fieldCPFocusPosition.get() == ""):
+        error = 1
+        messagebox.showerror("Error","Focus-device contains blank")
+    if (intFlagCond.get() == 1) and ((fieldCPConditionType.get() == "" or fieldCPConditionObject.get() == "" or fieldCPConditionPosition.get() == "")):
+        error = 1
+        messagebox.showerror("Error","Condition-state contains blank")
+    if (entryCPName.get() == "" ):
+        error = 1
+        messagebox.showerror("Error","Name contains blank")
+    ## check date ranges are within what exists in dataset
+    dts = datetime(int(entryCPStartYear.get()), int(entryCPStartMonth.get()), int(entryCPStartDay.get()), int(entryCPStartHour.get()), int(entryCPStartMinute.get()), int(entryCPStartSecond.get()), 0)
+    dte = datetime(int(entryCPEndYear.get()), int(entryCPEndMonth.get()), int(entryCPEndDay.get()), int(entryCPEndHour.get()), int(entryCPEndMinute.get()), int(entryCPEndSecond.get()), 0)
+    if (dts < datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeStartGetter() or dts > datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeEndGetter()):
+        error = 1
+        messagebox.showerror("Error","Start-date out of range")
+    if (dte < datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeStartGetter() or dte > datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeEndGetter()):
+        error = 1
+        messagebox.showerror("Error","End-date out of range")
+    if (dte < dts):
+        error = 1
+        messagebox.showerror("Error","End-date before Start-date")
+    ## check if a changed name is alredy in use
+    if (datafile.nameProtocolActiveGetter() != entryCPName.get()):
+        for name in datafile.listProtocolGetter():
+            if (name == entryCPName.get()):
+                error = 1
+                messagebox.showerror("Error","Duplicate Name")
+                break
+
+
+
+    #... add more validation checks here
+
+    ## if no error, update the protocol
+    if (error == 0):
+        datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).protocolUpdater(entryCPName.get(), entryCPStartYear.get(), entryCPStartMonth.get(), entryCPStartDay.get(), entryCPStartHour.get(), entryCPStartMinute.get(), entryCPStartSecond.get(), entryCPEndYear.get(), entryCPEndMonth.get(), entryCPEndDay.get(), entryCPEndHour.get(), entryCPEndMinute.get(), entryCPEndSecond.get(), dts, dte, fieldCPFocusType.get(), fieldCPFocusObject.get(), fieldCPFocusPosition.get(), intFlagCond.get(), 0, 0, fieldCPConditionType.get(), fieldCPConditionObject.get(), fieldCPConditionPosition.get(), "", "", 0)
+        frameHider()
+
+
 ## field entry validation functions
 def startYearValidator(input): 
     if ((input.isdigit() and int(input)>=2023) or input == ""): return True
-    else: entryStartYear.delete(0, END); return False
+    else: entryCPStartYear.delete(0, END); return False
 sYearVal = root.register(startYearValidator)
 def endYearValidator(input): 
     if ((input.isdigit() and int(input)>=2023) or input == ""): return True
-    else: entryEndYear.delete(0, END); return False
+    else: entryCPEndYear.delete(0, END); return False
 eYearVal = root.register(endYearValidator)
 def startMonthValidator(input): 
     if ((input.isdigit() and int(input)>=1 and int(input)<=12) or input == ""): return True
-    else: entryStartMonth.delete(0, END); return False
+    else: entryCPStartMonth.delete(0, END); return False
 sMonthVal = root.register(startMonthValidator)
 def endMonthValidator(input): 
     if ((input.isdigit() and int(input)>=1 and int(input)<=12) or input == ""): return True
-    else: entryEndMonth.delete(0, END); return False
+    else: entryCPEndMonth.delete(0, END); return False
 eMonthVal = root.register(endMonthValidator)
 def startDayValidator(input): 
     if ((input.isdigit() and int(input)>=1 and int(input)<=31) or input == ""): return True
-    else: entryStartDay.delete(0, END); return False
+    else: entryCPStartDay.delete(0, END); return False
 sDayVal = root.register(startDayValidator)
 def endDayValidator(input): 
     if ((input.isdigit() and int(input)>=1 and int(input)<=31) or input == ""): return True
-    else: entryEndDay.delete(0, END); return False
+    else: entryCPEndDay.delete(0, END); return False
 eDayVal = root.register(endDayValidator)
 def startHourValidator(input): 
     if ((input.isdigit() and int(input)>=0 and int(input)<=12) or input == ""): return True
-    else: entryStartHour.delete(0, END); return False
+    else: entryCPStartHour.delete(0, END); return False
 sHourVal = root.register(startHourValidator)
 def endHourValidator(input): 
     if ((input.isdigit() and int(input)>=0 and int(input)<=12) or input == ""): return True
-    else: entryEndHour.delete(0, END); return False
+    else: entryCPEndHour.delete(0, END); return False
 eHourVal = root.register(endHourValidator)
 def startMinuteValidator(input): 
     if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
-    else: entryStartMinute.delete(0, END); return False
+    else: entryCPStartMinute.delete(0, END); return False
 sMinuteVal = root.register(startMinuteValidator)
 def endMinuteValidator(input): 
     if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
-    else: entryEndMinute.delete(0, END); return False
+    else: entryCPEndMinute.delete(0, END); return False
 eMinuteVal = root.register(endMinuteValidator)
 def startSecondValidator(input): 
     if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
-    else: entryStartSecond.delete(0, END); return False
+    else: entryCPStartSecond.delete(0, END); return False
 sSecondVal = root.register(startSecondValidator)
 def endSecondValidator(input): 
     if ((input.isdigit() and int(input)>=0 and int(input)<=60) or input == ""): return True
-    else: entryEndSecond.delete(0, END); return False
+    else: entryCPEndSecond.delete(0, END); return False
 eSecondVal = root.register(endSecondValidator)
 ## clean and update picklists for downstream comboboxes
 def focusTypeChooser(event):
-    fieldFocusObject['value'] = datafile.dictDeviceGetter().get(fieldFocusType.get())
-    fieldFocusObject.set("")
-    fieldFocusPosition.set("")
+    fieldFocusObject['value'] = datafile.dictDeviceGetter().get(fieldCPFocusType.get())
+    fieldCPFocusObject.set("")
+    fieldCPFocusPosition.set("")
 def focusObjectChooser(event):
     listTemp = []
-    for pos in datafile.dictObjectGetter().get(fieldFocusObject.get()).listPositionGetter():
+    for pos in datafile.dictObjectGetter().get(fieldCPFocusObject.get()).listPositionGetter():
         listTemp.append(pos) 
-    fieldFocusPosition['value'] = listTemp
-    fieldFocusPosition.set("")
+    fieldCPFocusPosition['value'] = listTemp
+    fieldCPFocusPosition.set("")
 def conditionTypeChooser(event):
-    fieldConditionObject['value'] = datafile.dictDeviceGetter().get(fieldConditionType.get())
-    fieldConditionObject.set("")
-    fieldConditionPosition.set("")
+    fieldConditionObject['value'] = datafile.dictDeviceGetter().get(fieldCPConditionType.get())
+    fieldCPConditionObject.set("")
+    fieldCPConditionPosition.set("")
 def conditionObjectChooser(event):
     listTemp = []
-    for pos in datafile.dictObjectGetter().get(fieldConditionObject.get()).listPositionGetter():
+    for pos in datafile.dictObjectGetter().get(fieldCPConditionObject.get()).listPositionGetter():
         listTemp.append(pos) 
-    fieldConditionPosition['value'] = listTemp
-    fieldConditionPosition.set("")
+    fieldCPConditionPosition['value'] = listTemp
+    fieldCPConditionPosition.set("")
+
+
+# frameViewResult widget functions
+## coming from button buttonAccept; displays results
+def resultViewAccepter():
+   datafile.modeSetter(fieldRVMode.get())
+   ###... actions to bring up the result window with treeview
+   frameHider()
+
+# GUI Widgets
+######################################
 
     
 # widgets for menu bar
@@ -491,6 +614,7 @@ menuTop.add_cascade(label="Files", menu=menuFiles)
 menuFiles.add_command(label="Activate", command=fileActivator)
 ## protocol menus
 menuTop.add_cascade(label="Protocols", menu=menuProtocols)
+menuProtocols.add_command(label="New", command=protocolNew)
 menuProtocols.add_command(label="Activate", command=protocolActivator)
 menuProtocols.add_command(label="Construct", command=protocolConstructor)
 ## results menus
@@ -502,6 +626,7 @@ menuExit.add_command(label="Exit", command=exitExiter)
 
 # frames
 frameActivateFile=ttk.Frame(root, style="File.TFrame")
+frameNewProtocol=ttk.Frame(root, style="Protocol.TFrame")
 frameActivateProtocol=ttk.Frame(root, style="Protocol.TFrame")
 frameConstructProtocol=ttk.Frame(root, style="Protocol.TFrame")
 frameViewResult=ttk.Frame(root, style="Result.TFrame")
@@ -515,18 +640,36 @@ bannerActivateFileL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
 bannerActivateFileR=ttk.Label(frameActivateFile, textvariable=txtvarActive, style="File.TLabel", anchor=E)
 bannerActivateFileR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
 ## labels
-labelDatafile=ttk.Label(frameActivateFile, text="DataFile", style="File.TLabel")
-labelDatafile.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
+labelAFDatafile=ttk.Label(frameActivateFile, text="DataFile", style="File.TLabel")
+labelAFDatafile.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
 ## input fields
 ### datafile selection combobox runs datafileChooser function, selected file is in textvariable of field
-fieldDatafile = ttk.Combobox(frameActivateFile, value=datafile.listDatafile, style="Standard.TCombobox")
-fieldDatafile.current(0)
-fieldDatafile.place(relx=.25, rely=.06, relwidth=.73, relheight=.04)
+fieldAFDatafile = ttk.Combobox(frameActivateFile, value=datafile.listDatafile, style="Standard.TCombobox")
+fieldAFDatafile.current(0)
+fieldAFDatafile.place(relx=.25, rely=.06, relwidth=.73, relheight=.04)
 ## accept & cancel buttons
-buttonAccept = ttk.Button(frameActivateFile, text="Accept", style="Accept.TButton", command=datafileActivateAccepter)
-buttonAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
-buttonCancel = ttk.Button(frameActivateFile, text="Cancel", style="Cancel.TButton", command=canceller)
-buttonCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
+buttonAFAccept = ttk.Button(frameActivateFile, text="Accept", style="Accept.TButton", command=datafileActivateAccepter)
+buttonAFAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonAFCancel = ttk.Button(frameActivateFile, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonAFCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
+
+# widgets for frameNewProtocol
+## banner
+bannerNewProtocolL=ttk.Label(frameNewProtocol, text="Protocol / New", style="Protocol.TLabel")
+bannerNewProtocolL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
+bannerNewProtocolR=ttk.Label(frameNewProtocol, textvariable=txtvarActive, style="Protocol.TLabel", anchor=E)
+bannerNewProtocolR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
+## labels
+labelNPName=ttk.Label(frameNewProtocol, text="Name", style="Protocol.TLabel")
+labelNPName.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
+## fields
+entryNPName=ttk.Entry(frameNewProtocol, style="Standard.TEntry") #textvariable=txtProtocolName, 
+entryNPName.place(relx=.25, rely=.06, relwidth=.4, relheight=.04)
+## accept & cancel buttons
+buttonNPAccept = ttk.Button(frameNewProtocol, text="Accept", style="Accept.TButton", command=protocolNewAccepter)
+buttonNPAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonNPCancel = ttk.Button(frameNewProtocol, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonNPCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
 # widgets for frameActivateProtocol
@@ -536,18 +679,18 @@ bannerActivateProtocolL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
 bannerActivateProtocolR=ttk.Label(frameActivateProtocol, textvariable=txtvarActive, style="Protocol.TLabel", anchor=E)
 bannerActivateProtocolR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
 ## labels
-labelProtocol=ttk.Label(frameActivateProtocol, text="Protocol", style="Protocol.TLabel")
-labelProtocol.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
+labelAPProtocol=ttk.Label(frameActivateProtocol, text="Protocol", style="Protocol.TLabel")
+labelAPProtocol.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
 ## input fields
 ### datafile selection combobox runs datafileChooser function, selected file is in textvariable of field
-fieldProtocol = ttk.Combobox(frameActivateProtocol, value=datafile.listProtocolGetter(), style="Standard.TCombobox")
-fieldProtocol.current(0)
-fieldProtocol.place(relx=.25, rely=.06, relwidth=.73, relheight=.04)
+fieldAPProtocol = ttk.Combobox(frameActivateProtocol, values=datafile.listProtocolGetter(), style="Standard.TCombobox")
+fieldAPProtocol.current(0)
+fieldAPProtocol.place(relx=.25, rely=.06, relwidth=.4, relheight=.04)
 ## accept & cancel buttons
-buttonAccept = ttk.Button(frameActivateProtocol, text="Accept", style="Accept.TButton", command=protocolActivateAccepter)
-buttonAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
-buttonCancel = ttk.Button(frameActivateProtocol, text="Cancel", style="Cancel.TButton", command=canceller)
-buttonCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
+buttonAPAccept = ttk.Button(frameActivateProtocol, text="Accept", style="Accept.TButton", command=protocolActivateAccepter)
+buttonAPAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonAPCancel = ttk.Button(frameActivateProtocol, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonAPCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
 
@@ -559,166 +702,138 @@ bannerConstructProtocolL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
 bannerConstructProtocolR=ttk.Label(frameConstructProtocol, textvariable=txtvarActive, style="Protocol.TLabel", anchor=E)
 bannerConstructProtocolR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
 ## labels
-labelStart=ttk.Label(frameConstructProtocol, text="Start", style="Protocol.TLabel")
-labelStart.place(relx=.02, rely=.12, relwidth=.15, relheight=.04)
-labelEnd=ttk.Label(frameConstructProtocol, text="End", style="Protocol.TLabel")
-labelEnd.place(relx=.02, rely=.18, relwidth=.15, relheight=.04)
-labelYear=ttk.Label(frameConstructProtocol, text="Year", style="Protocol.TLabel")
-labelYear.place(relx=.25, rely=.06, relwidth=.08, relheight=.04)
-labelMonth=ttk.Label(frameConstructProtocol, text="Month", style="Protocol.TLabel")
-labelMonth.place(relx=.35, rely=.06, relwidth=.08, relheight=.04)
-labelDay=ttk.Label(frameConstructProtocol, text="Day", style="Protocol.TLabel")
-labelDay.place(relx=.45, rely=.06, relwidth=.08, relheight=.04)
-labelHour=ttk.Label(frameConstructProtocol, text="Hour", style="Protocol.TLabel")
-labelHour.place(relx=.55, rely=.06, relwidth=.08, relheight=.04)
-labelMinute=ttk.Label(frameConstructProtocol, text="Minute", style="Protocol.TLabel")
-labelMinute.place(relx=.65, rely=.06, relwidth=.08, relheight=.04)
-labelSecond=ttk.Label(frameConstructProtocol, text="Second", style="Protocol.TLabel")
-labelSecond.place(relx=.75, rely=.06, relwidth=.08, relheight=.04)
-
-labelFocus=ttk.Label(frameConstructProtocol, text="Focus", style="Protocol.TLabel")
-labelFocus.place(relx=.02, rely=.30, relwidth=.15, relheight=.04)
-labelCondition=ttk.Label(frameConstructProtocol, text="Condition", style="Protocol.TLabel")
-labelCondition.place(relx=.02, rely=.36, relwidth=.15, relheight=.04)
-labelType=ttk.Label(frameConstructProtocol, text="Type", style="Protocol.TLabel")
-labelType.place(relx=.25, rely=.24, relwidth=.18, relheight=.04)
-labelObject=ttk.Label(frameConstructProtocol, text="Object", style="Protocol.TLabel")
-labelObject.place(relx=.45, rely=.24, relwidth=.28, relheight=.04)
-labelPosition=ttk.Label(frameConstructProtocol, text="Position", style="Protocol.TLabel")
-labelPosition.place(relx=.75, rely=.24, relwidth=.18, relheight=.04)
-
-
+labelCPStart=ttk.Label(frameConstructProtocol, text="Start", style="Protocol.TLabel")
+labelCPStart.place(relx=.02, rely=.12, relwidth=.15, relheight=.04)
+labelCPEnd=ttk.Label(frameConstructProtocol, text="End", style="Protocol.TLabel")
+labelCPEnd.place(relx=.02, rely=.18, relwidth=.15, relheight=.04)
+labelCPYear=ttk.Label(frameConstructProtocol, text="Year", style="Protocol.TLabel")
+labelCPYear.place(relx=.25, rely=.06, relwidth=.08, relheight=.04)
+labelCPMonth=ttk.Label(frameConstructProtocol, text="Month", style="Protocol.TLabel")
+labelCPMonth.place(relx=.35, rely=.06, relwidth=.08, relheight=.04)
+labelCPDay=ttk.Label(frameConstructProtocol, text="Day", style="Protocol.TLabel")
+labelCPDay.place(relx=.45, rely=.06, relwidth=.08, relheight=.04)
+labelCPHour=ttk.Label(frameConstructProtocol, text="Hour", style="Protocol.TLabel")
+labelCPHour.place(relx=.55, rely=.06, relwidth=.08, relheight=.04)
+labelCPMinute=ttk.Label(frameConstructProtocol, text="Minute", style="Protocol.TLabel")
+labelCPMinute.place(relx=.65, rely=.06, relwidth=.08, relheight=.04)
+labelCPSecond=ttk.Label(frameConstructProtocol, text="Second", style="Protocol.TLabel")
+labelCPSecond.place(relx=.75, rely=.06, relwidth=.08, relheight=.04)
+labelCPFocus=ttk.Label(frameConstructProtocol, text="Focus", style="Protocol.TLabel")
+labelCPFocus.place(relx=.02, rely=.30, relwidth=.15, relheight=.04)
+labelCPCondition=ttk.Label(frameConstructProtocol, text="Condition", style="Protocol.TLabel")
+labelCPCondition.place(relx=.02, rely=.36, relwidth=.15, relheight=.04)
+labelCPType=ttk.Label(frameConstructProtocol, text="Type", style="Protocol.TLabel")
+labelCPType.place(relx=.25, rely=.24, relwidth=.18, relheight=.04)
+labelCPObject=ttk.Label(frameConstructProtocol, text="Object", style="Protocol.TLabel")
+labelCPObject.place(relx=.45, rely=.24, relwidth=.28, relheight=.04)
+labelCPPosition=ttk.Label(frameConstructProtocol, text="Position", style="Protocol.TLabel")
+labelCPPosition.place(relx=.75, rely=.24, relwidth=.18, relheight=.04)
+labelCPName=ttk.Label(frameConstructProtocol, text="Name", style="Protocol.TLabel")
+labelCPName.place(relx=.02, rely=.84, relwidth=.18, relheight=.04)
 
 ## input fields
-entryStartYear=ttk.Entry(frameConstructProtocol, textvariable=txtYearStart, style="Standard.TEntry")
-entryStartYear.place(relx=.25, rely=.12, relwidth=.08, relheight=.04)
-entryStartYear.config(validate="focusout", validatecommand=(sYearVal, '%P'))
-entryEndYear=ttk.Entry(frameConstructProtocol, textvariable=txtYearEnd, style="Standard.TEntry")
-entryEndYear.place(relx=.25, rely=.18, relwidth=.08, relheight=.04)
-entryEndYear.config(validate="focusout", validatecommand=(eYearVal, '%P'))
-entryStartMonth=ttk.Entry(frameConstructProtocol, textvariable=txtMonthStart, style="Standard.TEntry")
-entryStartMonth.place(relx=.35, rely=.12, relwidth=.08, relheight=.04)
-entryStartMonth.config(validate="focusout", validatecommand=(sMonthVal, '%P'))
-entryEndMonth=ttk.Entry(frameConstructProtocol, textvariable=txtMonthEnd, style="Standard.TEntry")
-entryEndMonth.place(relx=.35, rely=.18, relwidth=.08, relheight=.04)
-entryEndMonth.config(validate="focusout", validatecommand=(eMonthVal, '%P'))
-entryStartDay=ttk.Entry(frameConstructProtocol, textvariable=txtDayStart, style="Standard.TEntry")
-entryStartDay.place(relx=.45, rely=.12, relwidth=.08, relheight=.04)
-entryStartDay.config(validate="focusout", validatecommand=(sDayVal, '%P'))
-entryEndDay=ttk.Entry(frameConstructProtocol, textvariable=txtDayEnd, style="Standard.TEntry")
-entryEndDay.place(relx=.45, rely=.18, relwidth=.08, relheight=.04)
-entryEndDay.config(validate="focusout", validatecommand=(eDayVal, '%P'))
-entryStartHour=ttk.Entry(frameConstructProtocol, textvariable=txtHourStart, style="Standard.TEntry")
-entryStartHour.place(relx=.55, rely=.12, relwidth=.08, relheight=.04)
-entryStartHour.config(validate="focusout", validatecommand=(sHourVal, '%P'))
-entryEndHour=ttk.Entry(frameConstructProtocol, textvariable=txtHourEnd, style="Standard.TEntry")
-entryEndHour.place(relx=.55, rely=.18, relwidth=.08, relheight=.04)
-entryEndHour.config(validate="focusout", validatecommand=(eHourVal, '%P'))
-entryStartMinute=ttk.Entry(frameConstructProtocol, textvariable=txtMinuteStart, style="Standard.TEntry")
-entryStartMinute.place(relx=.65, rely=.12, relwidth=.08, relheight=.04)
-entryStartMinute.config(validate="focusout", validatecommand=(sMinuteVal, '%P'))
-entryEndMinute=ttk.Entry(frameConstructProtocol, textvariable=txtMinuteEnd, style="Standard.TEntry")
-entryEndMinute.place(relx=.65, rely=.18, relwidth=.08, relheight=.04)
-entryEndMinute.config(validate="focusout", validatecommand=(eMinuteVal, '%P'))
-entryStartSecond=ttk.Entry(frameConstructProtocol, textvariable=txtSecondStart, style="Standard.TEntry")
-entryStartSecond.place(relx=.75, rely=.12, relwidth=.08, relheight=.04)
-entryStartSecond.config(validate="focusout", validatecommand=(sSecondVal, '%P'))
-entryEndSecond=ttk.Entry(frameConstructProtocol, textvariable=txtSecondEnd, style="Standard.TEntry")
-entryEndSecond.place(relx=.75, rely=.18, relwidth=.08, relheight=.04)
-entryEndSecond.config(validate="focusout", validatecommand=(eSecondVal, '%P'))
-
-fieldFocusType = ttk.Combobox(frameConstructProtocol, value=datafile.listTypeDeviceGetter(), style="Standard.TCombobox")
-fieldFocusType.current(0)
-fieldFocusType.bind("<<ComboboxSelected>>", focusTypeChooser)
-fieldFocusType.place(relx=.25, rely=.30, relwidth=.18, relheight=.04)
-fieldFocusObject = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
-fieldFocusObject.bind("<<ComboboxSelected>>", focusObjectChooser)
-fieldFocusObject.place(relx=.45, rely=.30, relwidth=.28, relheight=.04)
-fieldFocusPosition = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
-fieldFocusPosition.place(relx=.75, rely=.30, relwidth=.18, relheight=.04)
-
-checkCondition = ttk.Checkbutton(frameConstructProtocol, variable = intFlagCond, style ="Standard.TCheckbutton", onvalue=1, offvalue=0)
-checkCondition.place(relx=.19, rely=.36, relwidth=.04, relheight=.04)
-
-fieldConditionType = ttk.Combobox(frameConstructProtocol, value=datafile.listTypeStateGetter(), style="Standard.TCombobox")
-fieldConditionType.current(0)
-fieldConditionType.bind("<<ComboboxSelected>>", conditionTypeChooser)
-fieldConditionType.place(relx=.25, rely=.36, relwidth=.18, relheight=.04)
-fieldConditionObject = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
-fieldConditionObject.bind("<<ComboboxSelected>>", conditionObjectChooser)
-fieldConditionObject.place(relx=.45, rely=.36, relwidth=.28, relheight=.04)
-fieldConditionPosition = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
-fieldConditionPosition.place(relx=.75, rely=.36, relwidth=.18, relheight=.04)
-
-
+entryCPStartYear=ttk.Entry(frameConstructProtocol, textvariable=txtYearStart, style="Standard.TEntry")
+entryCPStartYear.place(relx=.25, rely=.12, relwidth=.08, relheight=.04)
+entryCPStartYear.config(validate="focusout", validatecommand=(sYearVal, '%P'))
+entryCPEndYear=ttk.Entry(frameConstructProtocol, textvariable=txtYearEnd, style="Standard.TEntry")
+entryCPEndYear.place(relx=.25, rely=.18, relwidth=.08, relheight=.04)
+entryCPEndYear.config(validate="focusout", validatecommand=(eYearVal, '%P'))
+entryCPStartMonth=ttk.Entry(frameConstructProtocol, textvariable=txtMonthStart, style="Standard.TEntry")
+entryCPStartMonth.place(relx=.35, rely=.12, relwidth=.08, relheight=.04)
+entryCPStartMonth.config(validate="focusout", validatecommand=(sMonthVal, '%P'))
+entryCPEndMonth=ttk.Entry(frameConstructProtocol, textvariable=txtMonthEnd, style="Standard.TEntry")
+entryCPEndMonth.place(relx=.35, rely=.18, relwidth=.08, relheight=.04)
+entryCPEndMonth.config(validate="focusout", validatecommand=(eMonthVal, '%P'))
+entryCPStartDay=ttk.Entry(frameConstructProtocol, textvariable=txtDayStart, style="Standard.TEntry")
+entryCPStartDay.place(relx=.45, rely=.12, relwidth=.08, relheight=.04)
+entryCPStartDay.config(validate="focusout", validatecommand=(sDayVal, '%P'))
+entryCPEndDay=ttk.Entry(frameConstructProtocol, textvariable=txtDayEnd, style="Standard.TEntry")
+entryCPEndDay.place(relx=.45, rely=.18, relwidth=.08, relheight=.04)
+entryCPEndDay.config(validate="focusout", validatecommand=(eDayVal, '%P'))
+entryCPStartHour=ttk.Entry(frameConstructProtocol, textvariable=txtHourStart, style="Standard.TEntry")
+entryCPStartHour.place(relx=.55, rely=.12, relwidth=.08, relheight=.04)
+entryCPStartHour.config(validate="focusout", validatecommand=(sHourVal, '%P'))
+entryCPEndHour=ttk.Entry(frameConstructProtocol, textvariable=txtHourEnd, style="Standard.TEntry")
+entryCPEndHour.place(relx=.55, rely=.18, relwidth=.08, relheight=.04)
+entryCPEndHour.config(validate="focusout", validatecommand=(eHourVal, '%P'))
+entryCPStartMinute=ttk.Entry(frameConstructProtocol, textvariable=txtMinuteStart, style="Standard.TEntry")
+entryCPStartMinute.place(relx=.65, rely=.12, relwidth=.08, relheight=.04)
+entryCPStartMinute.config(validate="focusout", validatecommand=(sMinuteVal, '%P'))
+entryCPEndMinute=ttk.Entry(frameConstructProtocol, textvariable=txtMinuteEnd, style="Standard.TEntry")
+entryCPEndMinute.place(relx=.65, rely=.18, relwidth=.08, relheight=.04)
+entryCPEndMinute.config(validate="focusout", validatecommand=(eMinuteVal, '%P'))
+entryCPStartSecond=ttk.Entry(frameConstructProtocol, textvariable=txtSecondStart, style="Standard.TEntry")
+entryCPStartSecond.place(relx=.75, rely=.12, relwidth=.08, relheight=.04)
+entryCPStartSecond.config(validate="focusout", validatecommand=(sSecondVal, '%P'))
+entryCPEndSecond=ttk.Entry(frameConstructProtocol, textvariable=txtSecondEnd, style="Standard.TEntry")
+entryCPEndSecond.place(relx=.75, rely=.18, relwidth=.08, relheight=.04)
+entryCPEndSecond.config(validate="focusout", validatecommand=(eSecondVal, '%P'))
+entryCPName=ttk.Entry(frameConstructProtocol, textvariable=txtProtocolName, style="Standard.TEntry")
+entryCPName.place(relx=.25, rely=.84, relwidth=.4, relheight=.04)
+fieldCPFocusType = ttk.Combobox(frameConstructProtocol, value=datafile.listTypeDeviceGetter(), style="Standard.TCombobox")
+fieldCPFocusType.current(0)
+fieldCPFocusType.bind("<<ComboboxSelected>>", focusTypeChooser)
+fieldCPFocusType.place(relx=.25, rely=.30, relwidth=.18, relheight=.04)
+fieldCPFocusObject = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldCPFocusObject.bind("<<ComboboxSelected>>", focusObjectChooser)
+fieldCPFocusObject.place(relx=.45, rely=.30, relwidth=.28, relheight=.04)
+fieldCPFocusPosition = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldCPFocusPosition.place(relx=.75, rely=.30, relwidth=.18, relheight=.04)
+fieldCPConditionType = ttk.Combobox(frameConstructProtocol, value=datafile.listTypeStateGetter(), style="Standard.TCombobox")
+fieldCPConditionType.current(0)
+fieldCPConditionType.bind("<<ComboboxSelected>>", conditionTypeChooser)
+fieldCPConditionType.place(relx=.25, rely=.36, relwidth=.18, relheight=.04)
+fieldCPConditionObject = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldCPConditionObject.bind("<<ComboboxSelected>>", conditionObjectChooser)
+fieldCPConditionObject.place(relx=.45, rely=.36, relwidth=.28, relheight=.04)
+fieldCPConditionPosition = ttk.Combobox(frameConstructProtocol, style="Standard.TCombobox")
+fieldCPConditionPosition.place(relx=.75, rely=.36, relwidth=.18, relheight=.04)
+checkCPCondition = ttk.Checkbutton(frameConstructProtocol, variable = intFlagCond, style ="Standard.TCheckbutton", onvalue=1, offvalue=0)
+checkCPCondition.place(relx=.19, rely=.36, relwidth=.04, relheight=.04)
 
 
 
 
 ## accept & cancel buttons
-buttonAccept = ttk.Button(frameConstructProtocol, text="Accept", style="Accept.TButton", command=protocolCreateAccepter)
-buttonAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
-buttonCancel = ttk.Button(frameConstructProtocol, text="Cancel", style="Cancel.TButton", command=canceller)
-buttonCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
+buttonCPAccept = ttk.Button(frameConstructProtocol, text="Accept", style="Accept.TButton", command=protocolConstructAccepter)
+buttonCPAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonCPCancel = ttk.Button(frameConstructProtocol, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonCPCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
 
 
 
 
+
+# widgets for frameResultViewer
+## banner
+bannerResultViewL=ttk.Label(frameViewResult, text="Results / Mode", style="Result.TLabel")
+bannerResultViewL.place(relx=.0, rely=0, relwidth=.5, relheight=.04)
+bannerResultViewR=ttk.Label(frameViewResult, textvariable=txtvarActive, style="Result.TLabel", anchor=E)
+bannerResultViewR.place(relx=.5, rely=0, relwidth=.5, relheight=.04)
+## labels
+labelRVDatafile=ttk.Label(frameViewResult, text="Datafile", style="Result.TLabel")
+labelRVDatafile.place(relx=.02, rely=.06, relwidth=.2, relheight=.04)
+labelRVProtocol=ttk.Label(frameViewResult, text="Protocol", style="Result.TLabel")
+labelRVProtocol.place(relx=.02, rely=.12, relwidth=.2, relheight=.04)
+labelRVMode=ttk.Label(frameViewResult, text="Mode", style="Result.TLabel")
+labelRVMode.place(relx=.02, rely=.18, relwidth=.2, relheight=.04)
+labelRVDatafileName=ttk.Label(frameViewResult, textvariable=txtvarFile, style="Result.TLabel")
+labelRVDatafileName.place(relx=.25, rely=.06, relwidth=.73, relheight=.04)
+labelRVProtocolName=ttk.Label(frameViewResult, textvariable=txtvarProtocol, style="Result.TLabel")
+labelRVProtocolName.place(relx=.25, rely=.12, relwidth=.73, relheight=.04)
+## input fields
+fieldRVMode = ttk.Combobox(frameViewResult, value=datafile.listModeGetter(), style="Standard.TCombobox")
+fieldRVMode.current(0)
+fieldRVMode.place(relx=.25, rely=.18, relwidth=.73, relheight=.04)
+## accept & cancel buttons
+buttonRVAccept = ttk.Button(frameViewResult, text="Accept", style="Accept.TButton", command=resultViewAccepter)
+buttonRVAccept.place(relx=.02, rely=.92, relwidth=.1, relheight=.04)
+buttonRVCancel = ttk.Button(frameViewResult, text="Cancel", style="Cancel.TButton", command=canceller)
+buttonRVCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
 
 root.mainloop()
 
-
-
-
-"""
-# stub code for an entry field
-var=StringVar()
-var.set("default")
-def entryUpdater(event):
-    var = field.get()
-field = Entry(root)
-field.insert(0, var.get())
-field.bind("<Return>", entryUpdater)
-field.pack()
-"""
-
-"""
-# stub code for a combo box
-selection = ""
-def choose(event):
-    selection=combo.get()
-options = ["ONE", "TWO", "THREE"]
-combo = ttk.Combobox(root, value=options)
-combo.current(0)
-combo.bind("<<ComboboxSelected>>", choose)
-combo.pack()
-"""
-
-"""
-# stub code for option box
-options = ["ONE", "TWO", "THREE"]
-selection = StringVar()
-selection.set(options[0])
-drop = OptionMenu(frameActivateFile, selection, *options)
-drop.pack()
-"""
-
-"""
-#x# entry field that got discarded but worked
-labelDirDatafile=ttk.Label(frameActivateFile, text="Directory: ", style="File.TLabel")
-labelDirDatafile.place(relx=.02, rely=.04, relwidth=.2, relheight=.04)
-
-fieldDirDatafile = ttk.Entry(frameActivateFile, style="File.TEntry")
-fieldDirDatafile.insert(0, directoryDatafiles.get())
-fieldDirDatafile.bind("<Return>", dirDatafilesUpdater)
-fieldDirDatafile.place(relx=.25, rely=.04, relwidth=.73, relheight=.04)
-#x# function that went with it
-def dirDatafilesUpdater(event):
-    directoryDatafiles.set(fieldDirDatafile.get())
-    listDatafiles = fileLister(directoryDatafiles.get())
-    fieldDatafile['values']=listDatafiles
-"""
