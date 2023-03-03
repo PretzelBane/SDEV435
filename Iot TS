@@ -10,6 +10,7 @@
 from ctypes.wintypes import PSIZE
 from distutils.cmd import Command
 from email.utils import parsedate_to_datetime
+from lib2to3.pgen2.token import NAME
 import os
 from tkinter import *
 from tkinter import ttk, messagebox
@@ -18,6 +19,8 @@ import pandas as pd
 import csv
 from datetime import datetime
 import re
+import numpy as np
+
 
 
 # Class Definitions
@@ -35,12 +38,10 @@ class Datafile:
         self.__name = self.listDatafile[0]
         self.__path = self.__dir + "/" + self.__name
         self.__dictObject ={}
-        self.__listObject =[]
         self.__dictDevice ={}
         self.__listType =[]
         self.__listTypeState =[]
         self.__listTypeDevice =[]
-        self.__listDevice =[]
         self.__dictProtocol ={}
         self.__listProtocol =[]
         self.__mode = "Present"
@@ -56,8 +57,6 @@ class Datafile:
         return self.__listMode
     def dictObjectGetter(self):
         return self.__dictObject
-    def listObjectGetter(self):
-        return self.__listObject
     def dictDeviceGetter(self):
         return self.__dictDevice
     def listTypeGetter(self):
@@ -91,21 +90,19 @@ class Datafile:
         ### load the csv file into the dataframe (df)
         self.df = pd.read_csv(self.__path)
         ## add at datetime column and populate from csv data
-        self.df['datetime'] = self.df['Month'].astype(str)+'.'+self.df['Day'].astype(str)+'.'+self.df['Year'].astype(str)+' '+self.df['Hour'].astype(str)+':'+self.df['Minute'].astype(str)+':'+self.df['Second'].astype(str)
-        self.df['datetime'] = pd.to_datetime(self.df['datetime'], infer_datetime_format=True)
+        self.df['Datetime'] = self.df['Month'].astype(str)+'.'+self.df['Day'].astype(str)+'.'+self.df['Year'].astype(str)+' '+self.df['Hour'].astype(str)+':'+self.df['Minute'].astype(str)+':'+self.df['Second'].astype(str)
+        self.df['Datetime'] = pd.to_datetime(self.df['Datetime'], infer_datetime_format=True)
         ## build a class for each unique object in the datafile
-        ### also create a new dictionary of name : class pairs & a list of just objects for easy reference
+        ### also create a new dictionary of name : class pairs 
         self.__dictObject.clear()
-        self.__listObject.clear()
         for obj in self.df['Device'].unique():
             self.__dictObject.update({obj : Object(obj)})
-            self.__listObject.append(Object(obj))
         ### loop through the newly created object class instances and add type & list of positions to each
         for name, obj in self.__dictObject.items():
             self.__fdf = self.df[self.df.Device == name]
             obj.typeSetter(self.__fdf['Type'].iloc[0])
             obj.listPositionSetter(self.__fdf['Value'].unique())
-        ## build a lists of object types & a dictionary of types and their associated object names
+        ## build a list of object types & a dictionary of types and their associated object names
         ### build the type list
         self.__listType.clear()
         self.__dictDevice.clear()
@@ -144,7 +141,40 @@ class Datafile:
         self.__dictProtocol.update({pname : Protocol("", datafile.nameGetter(), "2023", "1", "1", "0", "0", "0", "2023", "1", "1", "0", "0", "0", dts, dte, "", "", "", 0, 0, 0, "", "", "", "", "", 0)})
         self.__listProtocol.append(pname)
         self.__nameProtocolActive = pname
-        
+
+    def resultPrepper(self):
+        ### create/populate a filtered version of the dataframe that includes only the protocol-specified dates
+        self.df_filt = self.df.loc[(self.df['Datetime'] >= self.__dictProtocol.get(self.__nameProtocolActive).datetimeStartGetter()) & (self.df['Datetime'] <= self.__dictProtocol.get(self.__nameProtocolActive).datetimeEndGetter())].copy()
+        ### create a 'show' column filled with 1 and a 'Duration' column filled with 0
+        self.df_filt['Show'] = 1
+        self.df_filt['Duration'] = 0
+        ### create/populate a 'Duration' column with the time that a device stays in a particular position
+        #### loop through the objects in the datafiles object dictionary
+        for key, value in self.__dictObject.items():
+            if (value.typeGetter() != "State"):
+                devstart = None
+                devend = None
+                #### loop through the dataframe in reverse
+                for row in self.df_filt[::-1].itertuples():
+                    if (self.df_filt['Device'].at[row.Index] == value.nameGetter()):
+                        if (self.df_filt['Value'].at[row.Index] != value.listPositionGetter()[0]):
+                            devend = self.df_filt['Datetime'].at[row.Index]
+                            if (devstart != None):
+                                self.df_filt['Duration'].at[row.Index] = (devstart - devend)/np.timedelta64(1,'s')
+                        else:
+                            devstart = self.df_filt['Datetime'].at[row.Index]
+                            if (devend != None):
+                                self.df_filt['Duration'].at[row.Index] = (devend - devstart)/np.timedelta64(1,'s')
+
+        print('after resultPrepper:')
+        print(self.df_filt)
+
+    def resultFocuser(self):
+        pass
+
+
+
+
 # Object class
 #=================================================================================================#
 # one instance for each device or state-variable found in the datafile
@@ -152,6 +182,8 @@ class Object:
     # initialization
     def __init__(self, pname):
         self.__name = pname
+        self.__type = None
+        self.__listPosition = []
     # getters
     def nameGetter(self):
         return self.__name
@@ -329,6 +361,15 @@ class Protocol:
 
 # Initial setup of the Datafile class instance
 datafile = Datafile()
+
+
+#?????  troubleshooting  ?????????????????????????????????????????????????????????????????????????????????????
+#print('****')
+#print(datafile.dictObjectGetter())
+#print('****')
+#for key, value in datafile.dictObjectGetter().items():
+#    print(key, '->', value.typeGetter(), '->', value.listPositionGetter()[0])
+#exit()
 
 
 # Start GUI
@@ -713,11 +754,61 @@ def focusAggChooser(event):
 ## result viewing acceptance
 ## coming from button buttonAccept; displays results
 def resultViewAccepter():
-   datafile.modeSetter(fieldRVMode.get())
+    ### update the viewing mode
+    datafile.modeSetter(fieldRVMode.get())
+    
+    datafile.resultPrepper()
+    """
+    ### create/populate a filtered version of the dataframe that includes only the protocol-specified dates
+    df_filt = df
+    df_filt[(df_filt['Datetime'] >= datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeStartGetter()) & (df_filt['Datetime'] <= datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeEndGetter())]
+    ### create a 'show' column filled with 1 and a 'Duration' column filled with 0
+    df_filt['Show'] = 1
+    df_filt['Duration'] = 0
+    """
+    datafile.resultFocuser()
+    """
+    ### create/populate a 'Duration' column with the time that a device stays in a particular position
+    #### loop through the objects in the datafiles object dictionary
+    for key, value in datafile.dictObjectGetter().items():
+        devstart = NULL
+        devend = NULL
+        #### loop through the dataframe in reverse
+        for row in df_filt[::-1].itertuples():
+            if (df_filt['Device'].at[row.Index] == value.nameGetter()):
+                if (df_filt['Value'].at[row.Index] != value.listPositionGetter()[0]):
+                    devend = df_filt['Datetime'].at[row.Index]
+                    if (devstart != NULL):
+                        df_filt['Duration'].at[row.Index] = (devstart - devend)/np.timedelta64(1,'s')
+                else:
+                    devstart = df_filt['Datetime'].at[row.Index]
+                    if (devend != NULL):
+                        df_filt['Duration'].at[row.Index] = (devend - devstart)/np.timedelta64(1,'s')
+    """
 
-   ###... actions to bring up the result window with treeview  ..........................................................................................
 
-   frameHider()
+    ### troubleshooting prints  ??????????????????????????????????????????????????????????????????????????????????????????????????????????????
+    #print(':::::')
+    #print(datafile.df_filt)
+
+
+
+    ### transformations if focus is checked
+    #if (check_focus == 1):
+    #    pass
+
+
+    
+
+
+
+
+
+
+
+    ###... actions to bring up the result window with treeview  ..........................................................................................
+
+    frameHider()
 
 
 # GUI Widgets Definitions
@@ -1036,4 +1127,5 @@ buttonRVCancel.place(relx=.14, rely=.92, relwidth=.1, relheight=.04)
 
 
 root.mainloop()
+
 
