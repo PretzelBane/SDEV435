@@ -143,20 +143,22 @@ class Datafile:
         self.__nameProtocolActive = pname
 
     def resultPrepper(self):
-        ### create/populate a filtered version of the dataframe that includes only the protocol-specified dates
+        ## create/populate a filtered version of the dataframe that includes only the protocol-specified dates
         self.df_filt = self.df.loc[(self.df['Datetime'] >= self.__dictProtocol.get(self.__nameProtocolActive).datetimeStartGetter()) & (self.df['Datetime'] <= self.__dictProtocol.get(self.__nameProtocolActive).datetimeEndGetter())].copy()
-        ### create a 'show' column filled with 1 and a 'Duration' column filled with 0
+        ## create a 'show' column filled with 1 and a 'Duration' column filled with 0
         self.df_filt['Show'] = 1
         self.df_filt['Duration'] = 0
-        ### create/populate a 'Duration' column with the time that a device stays in a particular position
-        #### loop through the objects in the datafiles object dictionary
+        ## create/populate a 'Duration' column with the time that a device stays in a particular position
+        ### loop through the objects in the datafiles object dictionary
         for key, value in self.__dictObject.items():
             if (value.typeGetter() != "State"):
                 devstart = None
                 devend = None
-                #### loop through the dataframe in reverse
+                ### loop through the dataframe in reverse
                 for row in self.df_filt[::-1].itertuples():
+                    ### only deal with one object at at time - that matches the outer loop
                     if (self.df_filt['Device'].at[row.Index] == value.nameGetter()):
+                        ### update the endpoint date records and populate duration as you go through the occurrences
                         if (self.df_filt['Value'].at[row.Index] != value.listPositionGetter()[0]):
                             devend = self.df_filt['Datetime'].at[row.Index]
                             if (devstart != None):
@@ -170,10 +172,18 @@ class Datafile:
         print(self.df_filt)
 
     def resultFocuser(self):
-        pass
+        ## use the focus object and position to un-show all the other actions
+        for row in self.df_filt.itertuples():
+            ### turn off show if it's not the focus device
+            if (self.df_filt['Device'].at[row.Index] != self.__dictProtocol.get(self.__nameProtocolActive).focusObjectGetter()):
+                self.df_filt['Show'].at[row.Index] = 0
+            else:
+                ### turn off show if it is the focus device but not the focus position
+                if (self.df_filt['Value'].at[row.Index] != self.__dictProtocol.get(self.__nameProtocolActive).focusPositionGetter()):
+                    self.df_filt['Show'].at[row.Index] = 0
 
-
-
+        print('after resultFocuser:')
+        print(self.df_filt)
 
 # Object class
 #=================================================================================================#
@@ -756,46 +766,15 @@ def focusAggChooser(event):
 def resultViewAccepter():
     ### update the viewing mode
     datafile.modeSetter(fieldRVMode.get())
-    
+    ### run the prepper function that is used no matter what
+    ### limits by date, builds the durations
     datafile.resultPrepper()
-    """
-    ### create/populate a filtered version of the dataframe that includes only the protocol-specified dates
-    df_filt = df
-    df_filt[(df_filt['Datetime'] >= datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeStartGetter()) & (df_filt['Datetime'] <= datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).datetimeEndGetter())]
-    ### create a 'show' column filled with 1 and a 'Duration' column filled with 0
-    df_filt['Show'] = 1
-    df_filt['Duration'] = 0
-    """
-    datafile.resultFocuser()
-    """
-    ### create/populate a 'Duration' column with the time that a device stays in a particular position
-    #### loop through the objects in the datafiles object dictionary
-    for key, value in datafile.dictObjectGetter().items():
-        devstart = NULL
-        devend = NULL
-        #### loop through the dataframe in reverse
-        for row in df_filt[::-1].itertuples():
-            if (df_filt['Device'].at[row.Index] == value.nameGetter()):
-                if (df_filt['Value'].at[row.Index] != value.listPositionGetter()[0]):
-                    devend = df_filt['Datetime'].at[row.Index]
-                    if (devstart != NULL):
-                        df_filt['Duration'].at[row.Index] = (devstart - devend)/np.timedelta64(1,'s')
-                else:
-                    devstart = df_filt['Datetime'].at[row.Index]
-                    if (devend != NULL):
-                        df_filt['Duration'].at[row.Index] = (devend - devstart)/np.timedelta64(1,'s')
-    """
+    ### run the focuser function if that checkbox is selected
+    ### un-shows anything that is not of the focus object & position
+    print(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagFocusGetter() == 1)
+    if (int(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagFocusGetter()) == 1):
+        datafile.resultFocuser()
 
-
-    ### troubleshooting prints  ??????????????????????????????????????????????????????????????????????????????????????????????????????????????
-    #print(':::::')
-    #print(datafile.df_filt)
-
-
-
-    ### transformations if focus is checked
-    #if (check_focus == 1):
-    #    pass
 
 
     
