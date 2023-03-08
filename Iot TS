@@ -170,7 +170,6 @@ class Datafile:
 
         print('after resultPrepper:')
         print(self.df_filt)
-
     def resultFocuser(self):
         ## use the focus object and position to un-show all the other actions
         for row in self.df_filt.itertuples():
@@ -184,6 +183,25 @@ class Datafile:
 
         print('after resultFocuser:')
         print(self.df_filt)
+    
+    def resultConditioner(self):
+        ## create/populate a 'state' column with 'unknown' as a place to add discovered state values
+        self.df_filt['State'] = "unknown"
+        stateVal = "unknown"
+        for row in self.df_filt.itertuples():
+            ### set State to whatever is in the stateVal variable
+            self.df_filt['State'].at[row.Index] = stateVal
+            # if the device matches the specified condition object (which is a state), update the stateValue to whatever is in that row & change its state to the generic 'influx'
+            if (self.df_filt['Device'].at[row.Index] == self.__dictProtocol.get(self.__nameProtocolActive).conditionObjectGetter()):
+                stateValue = self.df_filt['Value'].at[row.Index]
+                self.df_filt['State'].at[row.Index] = "influx"
+
+        print('after resultConditioner:')
+        print(self.df_filt)
+
+
+
+
 
 # Object class
 #=================================================================================================#
@@ -771,13 +789,15 @@ def resultViewAccepter():
     datafile.resultPrepper()
     ### run the focuser function if that checkbox is selected
     ### un-shows anything that is not of the focus object & position
-    print(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagFocusGetter() == 1)
     if (int(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagFocusGetter()) == 1):
         datafile.resultFocuser()
+    ### run the conditioner function if that checkbox is selected
+    ### creates a state column that tracks the value of the specified state variable for each device action
+    ### un-shows anything where the specified state is not in the specified value
+    if (int(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagConditionGetter()) == 1):
+        datafile.resultConditioner()
 
-
-
-    
+ 
 
 
 
