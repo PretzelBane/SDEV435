@@ -168,21 +168,21 @@ class Datafile:
                             if (devend != None):
                                 self.df_filt['Duration'].at[row.Index] = (devend - devstart)/np.timedelta64(1,'s')
 
-        print('after resultPrepper:')
-        print(self.df_filt)
-    def resultFocuser(self):
-        ## use the focus object and position to un-show all the other actions
-        for row in self.df_filt.itertuples():
-            ### turn off show if it's not the focus device
-            if (self.df_filt['Device'].at[row.Index] != self.__dictProtocol.get(self.__nameProtocolActive).focusObjectGetter()):
-                self.df_filt['Show'].at[row.Index] = 0
-            else:
-                ### turn off show if it is the focus device but not the focus position
-                if (self.df_filt['Value'].at[row.Index] != self.__dictProtocol.get(self.__nameProtocolActive).focusPositionGetter()):
-                    self.df_filt['Show'].at[row.Index] = 0
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        pd.set_option('expand_frame_repr', False)
 
+        print('after resultPrepper:')
+        print(self.df_filt.loc[self.df_filt['Show'] == 1])
+
+
+    def resultFocuser(self):
+        ## use the focus object and position to dictate the show value for each row
+        self.df_filt['Show'] = np.where(((self.df_filt['Device'] == self.__dictProtocol.get(self.__nameProtocolActive).focusObjectGetter()) & (self.df_filt['Value'] == self.__dictProtocol.get(self.__nameProtocolActive).focusPositionGetter())),1 ,0)
+        
         print('after resultFocuser:')
-        print(self.df_filt)
+        print(self.df_filt.loc[self.df_filt['Show'] == 1])
+
     
     def resultConditioner(self):
         ## create/populate a 'state' column with 'unknown' as a place to add discovered state values
@@ -193,14 +193,30 @@ class Datafile:
             self.df_filt['State'].at[row.Index] = stateVal
             # if the device matches the specified condition object (which is a state), update the stateValue to whatever is in that row & change its state to the generic 'influx'
             if (self.df_filt['Device'].at[row.Index] == self.__dictProtocol.get(self.__nameProtocolActive).conditionObjectGetter()):
-                stateValue = self.df_filt['Value'].at[row.Index]
+                stateVal = self.df_filt['Value'].at[row.Index]
                 self.df_filt['State'].at[row.Index] = "influx"
+        self.df_filt['Show'] = np.where(((self.df_filt['Show'] == 1) & (self.df_filt['State'] == self.__dictProtocol.get(self.__nameProtocolActive).conditionPositionGetter())) ,1, 0)
 
-        print('after resultConditioner:')
-        print(self.df_filt)
+        print('after resultConditioner: ', self.__dictProtocol.get(self.__nameProtocolActive).conditionObjectGetter())
+        print(self.df_filt.loc[self.df_filt['Show'] == 1])
 
+    def resultDurationer(self):
+        ## convert durations from seconds to the specified units of seconds, minutes, or hours
+        if (self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdUnitGetter() != 'Seconds'):
+            if (self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdUnitGetter() == 'Minutes'):
+                self.df_filt['Duration'] = np.where(self.df_filt['Duration'] != 0, self.df_filt['Duration'] / 60, self.df_filt['Duration'])
+            else:
+                self.df_filt['Duration'] = np.where(self.df_filt['Duration'] != 0, self.df_filt['Duration'] / 360, self.df_filt['Duration'])
+        ## depending on the specified direction, unshow records where the duration is beyond the specified threshold
+        if (self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdDirGetter() == 'Greater Than'):
+            self.df_filt['Show'] = np.where((self.df_filt['Show'] == 1) & (self.df_filt['Duration'] > int(self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdValueGetter())),1, 0)
+        else:
+            self.df_filt['Show'] = np.where((self.df_filt['Show'] == 1) & (self.df_filt['Duration'] < int(self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdValueGetter())),1, 0)
 
+        print('after resultDurationer: ', self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdUnitGetter(), " -- ", self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdDirGetter(), " -- ", self.__dictProtocol.get(self.__nameProtocolActive).selectThresholdValueGetter())
+        print(self.df_filt.loc[self.df_filt['Show'] == 1])
 
+        exit()
 
 
 # Object class
@@ -797,7 +813,12 @@ def resultViewAccepter():
     if (int(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagConditionGetter()) == 1):
         datafile.resultConditioner()
 
+    ### run the durationer function if that checkbox is selected
+    ### un-shows anything where the duration is above/below the specified duration threshold
+    if (int(datafile.dictProtocolGetter().get(datafile.nameProtocolActiveGetter()).flagSelThresholdGetter()) == 1):
+        datafile.resultDurationer()
  
+
 
 
 
